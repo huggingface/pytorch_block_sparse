@@ -63,8 +63,8 @@ class BlockSparseMatrix:
 
     def build_indices(self):
         nnz = self.block_mask.nonzero()
-        self.cols_a, self.row_end_a = self.build_indices_(nnz, False)
-        self.rows_b, self.col_end_b  = self.build_indices_(nnz, True)
+        self.cols_a, self.row_ends_a = self.build_indices_(nnz, False)
+        self.rows_b, self.col_ends_b  = self.build_indices_(nnz, True)
 
     @classmethod
     def rand(cls, shape, n_blocks, block_shape=(16, 16)):
@@ -100,7 +100,7 @@ class BlockSparseMatrix:
         rows = torch.zeros((self.cols_a.shape[0] + 1), dtype=torch.int32)
 
         # Change self.row_ends_a to the right type
-        row_end_prepare = self.row_end_a.long()
+        row_end_prepare = self.row_ends_a.long()
 
         # Add ones to the start position of each new row
         rows.index_add_(0, row_end_prepare, torch.ones(size=row_end_prepare.shape, dtype=torch.int32))
@@ -145,6 +145,6 @@ class BlockSparseMatrix:
         return
 
     def reverse_matmul(self, a):
-        return block_sparse_cuda.blocksparse_matmul(a, self.cols_a, self.row_ends_a, self.data, *self.shape, *self.block_shape)
+        return block_sparse_cuda.blocksparse_matmul(a, self.col_ends_b, self.rows_b, self.data, *self.shape, *self.block_shape)
 
 

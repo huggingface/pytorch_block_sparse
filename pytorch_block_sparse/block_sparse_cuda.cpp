@@ -5,25 +5,25 @@
 // CUDA forward declarations
 
 
-torch::Tensor blocksparse_matmul_cuda(torch::Tensor a_dense,
-								      torch::Tensor b_cols,
-								      torch::Tensor b_row_end,
-								      torch::Tensor b_data,
-								      int b_size_rows,
-								      int b_size_cols,
-								      int b_block_size_rows,
-								      int b_block_size_cols);
+torch::Tensor blocksparse_matmul_cuda(torch::Tensor dense_a,
+								      torch::Tensor col_ends_b,
+								      torch::Tensor rows_b,
+								      torch::Tensor data_b,
+								      int size_rows_b,
+								      int size_cols_b,
+								      int block_size_rows_b,
+								      int block_size_cols_b);
 
-torch::Tensor blocksparse_matmul(torch::Tensor a_dense,
-                                 torch::Tensor b_cols,
+torch::Tensor blocksparse_matmul(torch::Tensor dense_a,
+                                 torch::Tensor col_ends_b,
                                  torch::Tensor b_row_end,
-                                 torch::Tensor b_data,
-                                 int b_size_rows,
-								 int b_size_cols,
-								 int b_block_size_rows,
-								 int b_block_size_cols)
+                                 torch::Tensor data_b,
+                                 int size_rows_b,
+								 int size_cols_b,
+								 int block_size_rows_b,
+								 int block_size_cols_b)
 {
-    return blocksparse_matmul_cuda(a_dense, b_cols, b_row_end, b_data, b_size_rows, b_size_cols, b_block_size_rows, b_block_size_cols);
+    return blocksparse_matmul_cuda(dense_a, col_ends_b, b_row_end, data_b, size_rows_b, size_cols_b, block_size_rows_b, block_size_cols_b);
 }
 
 

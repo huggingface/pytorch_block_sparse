@@ -177,7 +177,7 @@ class BlockSparseMatrix:
         return
 
     def transposed_matmul(self, dense_a):
-        """Compute a.matmul(self) or self.matmul(a) if reverse is True. """
+        """Compute a.matmul(self.t()) """
 
         shape_a = dense_a.shape
         shape_b = self.shape[1], self.shape[0]
@@ -185,8 +185,18 @@ class BlockSparseMatrix:
         if shape_a[1] != shape_b[0]:
             raise Exception("Invalid matrices sizes (%d, %d) x (%d, %d)" % (shape_a[0], shape_a[1], shape_b[0], shape_b[1]))
 
-        return block_sparse_cuda.blocksparse_matmul(dense_a,
-                                                    self.row_ends_a, self.cols_a, self.data,
-                                                    *self.shape, *self.block_shape,
-                                                    True)
+        out = torch.zeros((shape_a[0], shape_b[1]), device = dense_a.device)
 
+        cols_a = self.cols_a.flatten()
+
+        assert(dense_a.is_contiguous())
+        assert (self.row_ends_a.is_contiguous())
+        assert(cols_a.is_contiguous())
+        assert(self.data.is_contiguous())
+        assert(out.is_contiguous())
+
+        out2 = block_sparse_cuda.blocksparse_matmul_transpose(dense_a,
+                                                              self.row_ends_a, cols_a, self.data,
+                                                              *self.shape, *self.block_shape,
+                                                              out)
+        return out2

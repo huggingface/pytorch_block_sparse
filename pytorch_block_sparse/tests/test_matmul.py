@@ -7,9 +7,13 @@ class TestFun(TestCase):
     def test0(self):
         bsm = BlockSparseMatrix.rand((128, 64), 10, (16, 16))
 
-        a = torch.randn((256, 64))
+        a = torch.randn((256, 64), device="cuda")
 
         r = bsm.transposed_matmul(a)
+
+        print(r)
+        print(r.sum())
+
 
 if __name__ == '__main__':
     unittest.main()

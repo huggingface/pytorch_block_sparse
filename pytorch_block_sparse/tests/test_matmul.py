@@ -5,15 +5,11 @@ import unittest
 
 class TestFun(TestCase):
     def test0(self):
-        bsm = BlockSparseMatrix.rand((64, 128), 10, (16, 16))
+        bsm = BlockSparseMatrix.rand((128, 64), 10, (16, 16))
 
         a = torch.randn((256, 64))
 
-        print(a.shape, bsm.shape)
-
-        r = bsm.reverse_matmul(a)
-
-        print(r)
+        r = bsm.transposed_matmul(a)
 
 if __name__ == '__main__':
     unittest.main()

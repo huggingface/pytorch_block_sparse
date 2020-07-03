@@ -131,8 +131,40 @@ class BlockSparseMatrix:
 
         return out
 
+    def sanity_check(self):
+        cols = self.cols_a
+        row_end = self.row_ends_a
+        shape = self.shape
+        block_shape = self.block_shape
+
+        if len(cols.shape) != 2:
+            raise Exception("cols should be bidimensional, not of shape %s" % cols.shape)
+        if cols.dtype != torch.int32:
+            raise Exception("cols should be int32, not of type %s" % cols.dtype)
+        max_col = cols[:,0].max()
+        if max_col > shape[1] / block_shape[1]:
+            raise Exception("cols max element (%d) cannot be larger than shape[1]/block_shape[1] (%d)" % (max_col, shape[1] / block_shape[1]))
+
+        self.cols = cols
+
+        if len(row_end.shape) != 1:
+            raise Exception("row_end should be unidimensional, not of shape %s" % row_end.shape)
+        if row_end.shape[0] != shape[0] / block_shape[0]:
+            raise Exception("row_end.shape[0] (%d) should be equal to shape[0]/block_shape[0] (%d)" % (row_end.shape[0], shape[0] / block_shape[0]))
+        if row_end.dtype != torch.int32:
+            raise Exception("row_end should be int32, not of type %s" % row_end.dtype)
+
+        max_row_end = row_end.max()
+        if max_row_end > self.cols.shape[0]:
+            raise Exception("row_end max element (%d) cannot be larger than cols count (%d)" % (max_row_end, self.cols.shape[0]))
+        last_row_end = row_end[-1]
+        if last_row_end != self.cols.shape[0]:
+            raise Exception("row_end last element (%d) should be equal to cols count (%d)" % (last_row_end, self.cols.shape[0]))
+        self.row_end = row_end
+
+
     def check_with_dense(self, dense_version):
-        ## Partial check of to_dense
+        # Partial check of to_dense
         coo = self.build_coo_block_index().long()
 
         for i in range(coo.shape[1]):
@@ -144,7 +176,17 @@ class BlockSparseMatrix:
 
         return
 
-    def reverse_matmul(self, a):
-        return block_sparse_cuda.blocksparse_matmul(a, self.col_ends_b, self.rows_b, self.data, *self.shape, *self.block_shape)
+    def transposed_matmul(self, dense_a):
+        """Compute a.matmul(self) or self.matmul(a) if reverse is True. """
 
+        shape_a = dense_a.shape
+        shape_b = self.shape[1], self.shape[0]
+
+        if shape_a[1] != shape_b[0]:
+            raise Exception("Invalid matrices sizes (%d, %d) x (%d, %d)" % (shape_a[0], shape_a[1], shape_b[0], shape_b[1]))
+
+        return block_sparse_cuda.blocksparse_matmul(dense_a,
+                                                    self.row_ends_a, self.cols_a, self.data,
+                                                    *self.shape, *self.block_shape,
+                                                    True)
 

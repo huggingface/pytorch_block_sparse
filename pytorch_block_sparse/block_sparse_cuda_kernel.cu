@@ -46,11 +46,11 @@ __global__ void blocksparse_matmul_transpose_kernel(const torch::PackedTensorAcc
                                                     const int block_size_rows_b,
                                                     const int block_size_cols_b,
                                                     torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> dense_out) {
-  const int r = blockIdx.x * blockDim.x + threadIdx.x;
-  const int c = blockIdx.y * blockDim.y + threadIdx.y;
+  const int r = blockIdx.y * blockDim.y + threadIdx.y;
+  const int c = blockIdx.x * blockDim.x + threadIdx.x;
 
-  const int row_start = row_ends_b[blockIdx.y];
-  const int row_end = row_ends_b[blockIdx.y + 1];
+  const int row_start = row_ends_b[blockIdx.x];
+  const int row_end = row_ends_b[blockIdx.x + 1];
   __shared__ scalar_t fShare0[16 * 16];
   __shared__ scalar_t fShare1[16 * 16];
 
@@ -58,7 +58,7 @@ __global__ void blocksparse_matmul_transpose_kernel(const torch::PackedTensorAcc
 
   for(int i = row_start; i < row_end ; i ++) {
       const int column = cols_b[i * 2];
-      const int block_offset_row = cols_b[i * 2 + 1] * block_size_rows_b + threadIdx.y;
+      const int block_offset_row = cols_b[i * 2 + 1] * block_size_rows_b + threadIdx.x;
       const int block_offset_col = column * block_size_cols_b;
 
       //fShare0[threadIdx.x + threadIdx.y * blockDim.x];
@@ -88,10 +88,10 @@ torch::Tensor blocksparse_matmul_transpose_cuda(torch::Tensor dense_a,
 
     //printf("%d, %d\n", sizes_a[0], sizes_a[1]);
 
-    const dim3 blocks(sizes_out[0] / block_size_rows_b,
-                      sizes_out[1] / block_size_cols_b,
+    const dim3 blocks(sizes_out[1] / block_size_cols_b,
+                      sizes_out[0] / block_size_rows_b,
                       1);
-    const dim3 threads_per_block(block_size_rows_b, block_size_cols_b);
+    const dim3 threads_per_block(block_size_cols_b, block_size_rows_b);
 
     //printf("blocks %d %d\n", blocks.x, blocks.y);
     //printf("threads_per_block %d %d\n", threads_per_block.x, threads_per_block.y);

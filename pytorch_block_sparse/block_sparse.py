@@ -7,6 +7,12 @@ class BlockSparseMatrix:
     # row_start is a index into cols (int32)
     # Data is (len(cols), block_shape, block_shape)
     def __init__(self, shape, block_mask, data, block_shape=(16, 16)):
+
+        if block_mask.device != data.device:
+            raise Exception("block_mask and data should have same device, got %s and %s" % (block_mask.device, data.device))
+
+        self.device = block_mask.device
+
         if len(shape) != 2 or shape[0] % 16 != 0 or shape[1] % 16 != 0:
             raise Exception("shape should be a tuple of 2 multiples of 16")
         self.shape = torch.Size(shape)
@@ -32,6 +38,10 @@ class BlockSparseMatrix:
     def block_shape_(shape, block_shape):
         return torch.Size((shape[0] // block_shape[0], shape[1] // block_shape[1]))
 
+    def to(self, device):
+        for a in ["block_mask", "data", "cols_a", "row_start_ends_a", "rows_b", "col_start_ends_b"]:
+            getattr(self, a).to(device)
+
     def build_indices_(self, nnz,  transpose_indices):
         nnz = nnz.transpose(0,1)
         X, Y = self.block_shape_(self.shape, self.block_shape)
@@ -39,10 +49,10 @@ class BlockSparseMatrix:
         rows = nnz[0]
         cols = nnz[1]
 
-        block_shuffle = torch.arange(0, cols.shape[0])
+        block_shuffle = torch.arange(0, cols.shape[0], device = self.device)
 
         if transpose_indices:
-            block_indices = torch.zeros(X*Y, dtype=torch.long)
+            block_indices = torch.zeros(X*Y, dtype=torch.long, device = self.device)
             positions = rows * Y + cols
             block_indices[positions] = block_shuffle + 1
             block_indices = block_indices.reshape(X, Y).t().reshape(X * Y)
@@ -52,22 +62,22 @@ class BlockSparseMatrix:
             X, Y = Y, X
             rows, cols = cols, rows
 
-        row_ends = torch.zeros((X,), dtype=torch.long)
+        row_start_ends = torch.zeros((X + 1,), dtype=torch.long, device = self.device)
 
-        row_ends.index_add_(0, rows, torch.ones(size=(cols.shape[0],), dtype=torch.long))
-        row_ends = row_ends.cumsum(0).int()
+        row_start_ends.index_add_(0, rows + 1, torch.ones(size=(cols.shape[0],), dtype=torch.long, device = self.device))
+        row_start_ends = row_start_ends.cumsum(0).int()
 
         cols = torch.stack([cols, block_shuffle], 1).int()
 
-        return cols, row_ends
+        return cols, row_start_ends
 
     def build_indices(self):
         nnz = self.block_mask.nonzero()
-        self.cols_a, self.row_ends_a = self.build_indices_(nnz, False)
-        self.rows_b, self.col_ends_b  = self.build_indices_(nnz, True)
+        self.cols_a, self.row_start_ends_a = self.build_indices_(nnz, False)
+        self.rows_b, self.col_start_ends_b  = self.build_indices_(nnz, True)
 
     @classmethod
-    def rand(cls, shape, n_blocks, block_shape=(16, 16)):
+    def rand(cls, shape, n_blocks, block_shape=(16, 16), device = None):
         if len(shape) != 2 or shape[0] % 16 != 0 or shape[1] % 16 != 0:
             raise Exception("shape should be a tuple of 2 multiples of 16")
 
@@ -76,34 +86,34 @@ class BlockSparseMatrix:
         if n_blocks > X * Y:
             raise Exception("Too many blocks : %d > %d * %d = %d" % (n_blocks, X, Y, X * Y))
         positions = numpy.random.choice(X*Y, size=n_blocks, replace=False)
-        positions = torch.tensor(positions, dtype=torch.int64).sort()[0]
+        positions = torch.tensor(positions, dtype=torch.int64, device = device).sort()[0]
 
-        block_mask = torch.zeros(X * Y, dtype=torch.bool)
+        block_mask = torch.zeros(X * Y, dtype=torch.bool, device = device)
         block_mask[positions] = True
         block_mask = block_mask.view(X, Y)
 
-        data = torch.normal(0,1.0, size = (n_blocks * block_shape[0], block_shape[1]), dtype=torch.float)
+        data = torch.normal(0,1.0, size = (n_blocks * block_shape[0], block_shape[1]), dtype=torch.float, device = device)
 
         return cls(shape, block_mask, data, block_shape)
 
     def __repr__(self):
-        return "%s(shape=%s, cols=%s, row_ends_a=%s, data=%s, block_shape=%s)" % (self.__class__.__name__,
+        return "%s(shape=%s, cols=%s, row_start_ends_a=%s, data=%s, block_shape=%s)" % (self.__class__.__name__,
                                                                                self.shape,
                                                                                self.cols_a.shape,
-                                                                               self.row_ends_a.shape,
+                                                                               self.row_start_ends_a.shape,
                                                                                self.data.shape,
                                                                                self.block_shape)
 
     def build_coo_block_index(self):
         # Build a tensor to store the row indices.
         # It's one element too long for the moment, we'll trim it later
-        rows = torch.zeros((self.cols_a.shape[0] + 1), dtype=torch.int32)
+        rows = torch.zeros((self.cols_a.shape[0] + 1), dtype=torch.int32, device=self.device)
 
-        # Change self.row_ends_a to the right type
-        row_end_prepare = self.row_ends_a.long()
+        # Change self.row_start_ends_a to the right type
+        row_end_prepare = self.row_start_ends_a[1:].long()
 
         # Add ones to the start position of each new row
-        rows.index_add_(0, row_end_prepare, torch.ones(size=row_end_prepare.shape, dtype=torch.int32))
+        rows.index_add_(0, row_end_prepare, torch.ones(size=row_end_prepare.shape, dtype=torch.int32, device=self.device))
 
         # Accumulate those start positions to fill the remaining positions
         rows = rows.cumsum(0).int()
@@ -119,7 +129,8 @@ class BlockSparseMatrix:
 
         data = self.data.reshape(-1, *self.block_shape)
 
-        out = torch.sparse.FloatTensor(coo, data, (self.shape[0] // self.block_shape[0], self.shape[1] // self.block_shape[1]) + self.block_shape)
+        out = torch.sparse.FloatTensor(coo, data,
+                                       (self.shape[0] // self.block_shape[0], self.shape[1] // self.block_shape[1]) + self.block_shape)
 
         return out
 
@@ -133,7 +144,7 @@ class BlockSparseMatrix:
 
     def sanity_check(self):
         cols = self.cols_a
-        row_end = self.row_ends_a
+        row_end = self.row_start_ends_a[1:]
         shape = self.shape
         block_shape = self.block_shape
 
@@ -190,13 +201,13 @@ class BlockSparseMatrix:
         cols_a = self.cols_a.flatten()
 
         assert(dense_a.is_contiguous())
-        assert (self.row_ends_a.is_contiguous())
+        assert (self.row_start_ends_a.is_contiguous())
         assert(cols_a.is_contiguous())
         assert(self.data.is_contiguous())
         assert(out.is_contiguous())
 
         out2 = block_sparse_cuda.blocksparse_matmul_transpose(dense_a,
-                                                              self.row_ends_a, cols_a, self.data,
+                                                              self.row_start_ends_a, cols_a, self.data,
                                                               *self.shape, *self.block_shape,
                                                               out)
         return out2

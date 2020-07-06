@@ -6,7 +6,7 @@
 
 // Inspired by https://github.com/NVIDIA-developer-blog/code-samples/blob/master/posts/tensor-cores/simpleTensorCoreGEMM.cu
 template <typename scalar_t>
-__global__ void blocksparse_matmul_transpose_kernel(const torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> dense_a,
+__global__ void blocksparse_matmul_transpose_kernel_ref(const torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> dense_a,
                                                     const int64_t rows_a,
                                                     const int64_t cols_a,
                                                     const torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> row_ends_b,
@@ -35,6 +35,43 @@ __global__ void blocksparse_matmul_transpose_kernel(const torch::PackedTensorAcc
   dense_out[r][c] = accumulator;
 }
 
+// Inspired by https://github.com/NVIDIA-developer-blog/code-samples/blob/master/posts/tensor-cores/simpleTensorCoreGEMM.cu
+template <typename scalar_t>
+__global__ void blocksparse_matmul_transpose_kernel(const torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> dense_a,
+                                                    const int64_t rows_a,
+                                                    const int64_t cols_a,
+                                                    const torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> row_ends_b,
+                                                    const torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> cols_b,
+                                                    const torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> data_b,
+                                                    const int block_size_rows_b,
+                                                    const int block_size_cols_b,
+                                                    torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> dense_out) {
+  const int r = blockIdx.x * blockDim.x + threadIdx.x;
+  const int c = blockIdx.y * blockDim.y + threadIdx.y;
+
+  const int row_start = row_ends_b[blockIdx.y];
+  const int row_end = row_ends_b[blockIdx.y + 1];
+  __shared__ scalar_t fShare0[16 * 16];
+  __shared__ scalar_t fShare1[16 * 16];
+
+  scalar_t accumulator = 0.0;
+
+  for(int i = row_start; i < row_end ; i ++) {
+      const int column = cols_b[i * 2];
+      const int block_offset_row = cols_b[i * 2 + 1] * block_size_rows_b + threadIdx.y;
+      const int block_offset_col = column * block_size_cols_b;
+
+      //fShare0[threadIdx.x + threadIdx.y * blockDim.x];
+
+      #pragma unroll 16
+      for(int j = 0; j < block_size_cols_b; j++) {
+          accumulator += data_b[block_offset_row][j] * dense_a[r][block_offset_col + j];
+      }
+  }
+
+  dense_out[r][c] = accumulator;
+}
+
 torch::Tensor blocksparse_matmul_transpose_cuda(torch::Tensor dense_a,
 								      torch::Tensor row_ends_b,
 								      torch::Tensor cols_b,
@@ -51,19 +88,10 @@ torch::Tensor blocksparse_matmul_transpose_cuda(torch::Tensor dense_a,
 
     //printf("%d, %d\n", sizes_a[0], sizes_a[1]);
 
-//#define SERIALIZE
-#ifdef SERIALIZE
-    const dim3 blocks(sizes_out[0],
-                      sizes_out[1],
-                      1);
-    const dim3 threads_per_block(1,1); //6, block_size_rows_b, 1);
-#else
     const dim3 blocks(sizes_out[0] / block_size_rows_b,
                       sizes_out[1] / block_size_cols_b,
                       1);
-    const dim3 threads_per_block(block_size_rows_b, block_size_cols_b); //6, block_size_rows_b, 1);
-#endif
-
+    const dim3 threads_per_block(block_size_rows_b, block_size_cols_b);
 
     //printf("blocks %d %d\n", blocks.x, blocks.y);
     //printf("threads_per_block %d %d\n", threads_per_block.x, threads_per_block.y);

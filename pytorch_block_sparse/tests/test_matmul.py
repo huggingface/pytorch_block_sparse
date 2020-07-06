@@ -34,9 +34,8 @@ class TestFun(TestCase):
         dbsm_t = dbsm.t().contiguous()
         pr = None
         start1.record()
-        if True:
-            for i in range(iterate):
-                pr = a.matmul(dbsm_t)
+        for i in range(iterate):
+            pr = a.matmul(dbsm_t)
         end1.record()
 
         torch.cuda.synchronize()
@@ -46,6 +45,8 @@ class TestFun(TestCase):
             s = pr.isclose(r).all()
             if not s.item():
                 raise Exception("Comparison failed : transposed_matmul issue")
+            else:
+                print("Comparison ok")
 
         return time0, time1
 
@@ -60,7 +61,7 @@ class TestFun(TestCase):
 
     def test1(self):
         sizes = [512, 512, 2048]
-        block_size = (32,32)
+        block_size = (16,16)
         for i in range(10):
             time_sparse, time_dense = self.helper(sizes, block_size, density = 1.0, iterate = 1000)
             if i != 0:

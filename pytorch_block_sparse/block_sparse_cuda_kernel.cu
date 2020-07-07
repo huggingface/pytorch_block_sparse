@@ -51,22 +51,32 @@ __global__ void blocksparse_matmul_transpose_kernel(const torch::PackedTensorAcc
 
   const int row_start = row_ends_b[blockIdx.x];
   const int row_end = row_ends_b[blockIdx.x + 1];
-  __shared__ scalar_t fShare0[16 * 16];
-  __shared__ scalar_t fShare1[16 * 16];
+  __shared__ scalar_t fshare_a[16][16];
+  __shared__ scalar_t fshare_b[16][16];
 
   scalar_t accumulator = 0.0;
 
+  #pragma unroll
   for(int i = row_start; i < row_end ; i ++) {
-      const int column = cols_b[i * 2];
-      const int block_offset_row = cols_b[i * 2 + 1] * block_size_rows_b + threadIdx.x;
-      const int block_offset_col = column * block_size_cols_b;
+      const int block_offset_row = cols_b[i * 2 + 1] * block_size_rows_b + threadIdx.y; // Change to threadIdx.x
+      const int block_offset_col = cols_b[i * 2] * block_size_cols_b;
 
-      //fShare0[threadIdx.x + threadIdx.y * blockDim.x];
+      __syncthreads();
 
-      #pragma unroll 16
+      fshare_a[threadIdx.y][threadIdx.x] = dense_a[r][block_offset_col + threadIdx.x];
+      fshare_b[threadIdx.y][threadIdx.x] = data_b[block_offset_row][threadIdx.x];
+
+      __syncthreads();
+
+      scalar_t* ptr_a = fshare_a[threadIdx.y];
+      scalar_t* ptr_b = fshare_b[threadIdx.x];
+
+      #pragma unroll
+
       for(int j = 0; j < block_size_cols_b; j++) {
-          accumulator += data_b[block_offset_row][j] * dense_a[r][block_offset_col + j];
+          accumulator += ptr_a[j] * ptr_b[j];
       }
+
   }
 
   dense_out[r][c] = accumulator;

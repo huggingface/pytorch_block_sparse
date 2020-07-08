@@ -99,8 +99,7 @@ torch::Tensor blocksparse_matmul_transpose_cuda(torch::Tensor dense_a,
     //printf("%d, %d\n", sizes_a[0], sizes_a[1]);
 
     const dim3 blocks(sizes_out[1] / block_size_cols_b,
-                      sizes_out[0] / block_size_rows_b,
-                      1);
+                      sizes_out[0] / block_size_rows_b);
     const dim3 threads_per_block(block_size_cols_b, block_size_rows_b);
 
     //printf("blocks %d %d\n", blocks.x, blocks.y);

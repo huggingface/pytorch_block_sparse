@@ -1,6 +1,9 @@
 from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
+import os
+rootdir = os.path.dirname(os.path.realpath(__file__))
+
 def readme():
     with open('README.md') as f:
         return f.read()
@@ -30,10 +33,12 @@ setup(name='pytorch_block_sparse',
       include_package_data=True,
       zip_safe=False,
       ext_modules=[
-        CUDAExtension('block_sparse_cuda', [
-            'pytorch_block_sparse/block_sparse_cuda.cpp',
+        CUDAExtension('block_sparse_native', [
+            'pytorch_block_sparse/block_sparse_native.cpp',
             'pytorch_block_sparse/block_sparse_cuda_kernel.cu',
-        ]),
+            'pytorch_block_sparse/block_sparse_cublas_kernel.cu',
+        ],
+                      extra_compile_args=['-I', '%s/pytorch_block_sparse' % rootdir]),
       ],
       cmdclass={
         'build_ext': BuildExtension

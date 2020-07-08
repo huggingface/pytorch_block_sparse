@@ -1,6 +1,6 @@
 import torch
 import numpy
-import block_sparse_cuda
+import block_sparse_native
 
 class BlockSparseMatrix:
     # cols is a list of nonzero block column indexes (int32)
@@ -206,7 +206,7 @@ class BlockSparseMatrix:
         assert(self.data.is_contiguous())
         assert(out.is_contiguous())
 
-        out2 = block_sparse_cuda.blocksparse_matmul_transpose(dense_a,
+        out2 = block_sparse_native.blocksparse_matmul_transpose_sparse(dense_a,
                                                               self.row_start_ends_a, cols_a, self.data,
                                                               *self.shape, *self.block_shape,
                                                               out)

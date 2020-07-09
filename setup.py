@@ -36,7 +36,7 @@ setup(name='pytorch_block_sparse',
         CUDAExtension('block_sparse_native', [
             'pytorch_block_sparse/block_sparse_native.cpp',
             'pytorch_block_sparse/block_sparse_cuda_kernel.cu',
-            'pytorch_block_sparse/block_sparse_cublas_kernel.cu',
+#            'pytorch_block_sparse/block_sparse_cublas_kernel.cu',
             'pytorch_block_sparse/block_sparse_cutlass_kernel.cu',
         ],
                       extra_compile_args=['-I', '%s/pytorch_block_sparse' % rootdir]),

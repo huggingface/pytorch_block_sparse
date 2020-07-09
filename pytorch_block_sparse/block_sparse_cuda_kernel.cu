@@ -83,14 +83,14 @@ __global__ void blocksparse_matmul_transpose_kernel(const torch::PackedTensorAcc
 }
 
 torch::Tensor blocksparse_matmul_transpose_cuda(torch::Tensor dense_a,
-								      torch::Tensor row_ends_b,
-								      torch::Tensor cols_b,
-								      torch::Tensor data_b,
-								      int size_rows_b,
-								      int size_cols_b,
-								      int block_size_rows_b,
-								      int block_size_cols_b,
-								      torch::Tensor dense_out)
+											  torch::Tensor row_ends_b,
+											  torch::Tensor cols_b,
+											  torch::Tensor data_b,
+											  int size_rows_b,
+											  int size_cols_b,
+											  int block_size_rows_b,
+											  int block_size_cols_b,
+											  torch::Tensor dense_out)
 {
     auto sizes_out = dense_out.sizes().vec();
     auto sizes_a = dense_a.sizes().vec();

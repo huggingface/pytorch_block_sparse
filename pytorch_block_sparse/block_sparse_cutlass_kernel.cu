@@ -30,7 +30,6 @@
 #include "util/bsc.h"
 
 // Dispatch routines to CUTLASS
-#include "cublas_dispatch.h"
 #include "cutlass_dispatch.h"
 
 using namespace std;
@@ -117,6 +116,7 @@ bool test_bsc(
     float beta = 0.0;
 
 // Initialize cuBLAS
+/*
 	if (!cublas_inited) {
 		if (cublasCreate(&g_cublas_handle) != CUBLAS_STATUS_SUCCESS)
 		{
@@ -125,7 +125,7 @@ bool test_bsc(
 		}
 		cublas_inited = true;
 	}
-
+*/
 
 	bool test_error = test_bsc<
 	cutlass_gemm_dispatch<gemm::tiling_strategy::Custom, math_op, TransformA, TransformB, value_t, accum_t>,

@@ -1,6 +1,5 @@
 import torch
 import numpy
-import block_sparse_native
 
 class BlockSparseMatrix:
     # cols is a list of nonzero block column indexes (int32)
@@ -187,9 +186,10 @@ class BlockSparseMatrix:
 
         return
 
-    def transposed_matmul(self, dense_a):
+    def transposed_matmul(self, dense_a, method = 0):
         """Compute a.matmul(self.t()) """
-
+        import block_sparse_native
+        print(block_sparse_native)
         shape_a = dense_a.shape
         shape_b = self.shape[1], self.shape[0]
 
@@ -206,8 +206,16 @@ class BlockSparseMatrix:
         assert(self.data.is_contiguous())
         assert(out.is_contiguous())
 
-        out2 = block_sparse_native.blocksparse_matmul_transpose_sparse(dense_a,
+        if method == 0:
+            out2 = block_sparse_native.blocksparse_matmul_transpose_cuda(dense_a,
                                                               self.row_start_ends_a, cols_a, self.data,
                                                               *self.shape, *self.block_shape,
                                                               out)
+        elif method == 1:
+            dense_a_t = dense_a.t().contiguous()
+            out2 = block_sparse_native.blocksparse_matmul_transpose_cutlass(dense_a_t,
+                                                              self.row_start_ends_a, cols_a, self.data,
+                                                              *self.shape, *self.block_shape,
+                                                              out)
+
         return out2

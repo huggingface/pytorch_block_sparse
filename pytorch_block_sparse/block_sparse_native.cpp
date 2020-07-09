@@ -16,6 +16,17 @@ torch::Tensor blocksparse_matmul_transpose_cuda(torch::Tensor dense_a,
 								      torch::Tensor dense_out);
 
 
+torch::Tensor blocksparse_matmul_transpose_cutlass(torch::Tensor dense_a,
+								      torch::Tensor row_ends_b,
+								      torch::Tensor cols_b,
+								      torch::Tensor data_b,
+								      int size_rows_b,
+								      int size_cols_b,
+								      int block_size_rows_b,
+								      int block_size_cols_b,
+								      torch::Tensor dense_out);
+
+
 torch::Tensor blocksparse_matmul_transpose_cublas(torch::Tensor dense_a,
 								      torch::Tensor dense_b,
 								      torch::Tensor dense_out);

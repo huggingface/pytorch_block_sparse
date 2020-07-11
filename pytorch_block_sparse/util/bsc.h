@@ -132,7 +132,6 @@ public:
         CUDA_PERROR_EXIT(cudaMalloc((void ** )&_d_ptr, sizeof(int) * (_NBlocks + 1)));
         CUDA_PERROR_EXIT(cudaMalloc((void ** )&_d_indices, sizeof(int) * _nonZeroBlocks));
 
-
         // encode the input matrix into BSC format
         // initialize the non-zero block counting to use as offset
         int countNonZero = 0;
@@ -235,6 +234,15 @@ public:
 
 
     /**
+     * Get host data size
+
+     */
+    long h_data_size()
+    {
+        return _h_data.size();
+    }
+
+    /**
      * Get host data pointer
      */
     value_t const* h_data() const
@@ -251,6 +259,13 @@ public:
         return _h_ptr.data();
     }
 
+    /**
+     * Get host ptr size
+     */
+    long h_ptr_size()
+    {
+        return _h_ptr.size();
+    }
 
     /**
      * Get host ptr pointer
@@ -269,6 +284,13 @@ public:
         return _h_indices.data();
     }
 
+     /**
+     * Get host indices size
+     */
+    long h_indices_size()
+    {
+        return _h_indices.size();
+    }
 
     /**
      * Get host indices pointer

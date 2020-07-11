@@ -34,8 +34,11 @@ class BlockSparseMatrix:
         self.data = data
 
     @staticmethod
-    def block_shape_(shape, block_shape):
+    def blocks_count_(shape, block_shape):
         return torch.Size((shape[0] // block_shape[0], shape[1] // block_shape[1]))
+
+    def blocks_count(self):
+        return self.blocks_count_(self.shape, self.block_shape)
 
     def to(self, device):
         for a in ["block_mask", "data", "cols_a", "row_start_ends_a", "rows_b", "col_start_ends_b"]:
@@ -43,7 +46,7 @@ class BlockSparseMatrix:
 
     def build_indices_(self, nnz,  transpose_indices):
         nnz = nnz.transpose(0,1)
-        X, Y = self.block_shape_(self.shape, self.block_shape)
+        X, Y = self.blocks_count_(self.shape, self.block_shape)
 
         rows = nnz[0]
         cols = nnz[1]
@@ -66,7 +69,7 @@ class BlockSparseMatrix:
         row_start_ends.index_add_(0, rows + 1, torch.ones(size=(cols.shape[0],), dtype=torch.long, device = self.device))
         row_start_ends = row_start_ends.cumsum(0).int()
 
-        cols = torch.stack([cols, block_shuffle], 1).int()
+        #cols = torch.stack([cols, block_shuffle], 1).int()
 
         return cols, row_start_ends
 
@@ -80,7 +83,7 @@ class BlockSparseMatrix:
         if len(shape) != 2 or shape[0] % 16 != 0 or shape[1] % 16 != 0:
             raise Exception("shape should be a tuple of 2 multiples of 16")
 
-        X, Y = cls.block_shape_(shape, block_shape)
+        X, Y = cls.blocks_count_(shape, block_shape)
 
         if n_blocks > X * Y:
             raise Exception("Too many blocks : %d > %d * %d = %d" % (n_blocks, X, Y, X * Y))
@@ -91,7 +94,10 @@ class BlockSparseMatrix:
         block_mask[positions] = True
         block_mask = block_mask.view(X, Y)
 
-        data = torch.normal(0,1.0, size = (n_blocks * block_shape[0], block_shape[1]), dtype=torch.float, device = device)
+        data = torch.randn((n_blocks * block_shape[0], block_shape[1]), dtype=torch.float, device = device) # randn
+
+        data[::,::] = 1
+
 
         return cls(shape, block_mask, data, block_shape)
 
@@ -121,7 +127,7 @@ class BlockSparseMatrix:
         rows = rows[:-1]
 
         # Build the coo indexes
-        return torch.stack([rows, self.cols_a[:,0]], 0)
+        return torch.stack([rows, self.cols_a.int()], 0) # [:,0]
 
     def to_sparse(self):
         coo = self.build_coo_block_index().long()
@@ -186,10 +192,9 @@ class BlockSparseMatrix:
 
         return
 
-    def transposed_matmul(self, dense_a, method = 0):
+    def transposed_matmul(self, dense_a):
         """Compute a.matmul(self.t()) """
         import block_sparse_native
-        print(block_sparse_native)
         shape_a = dense_a.shape
         shape_b = self.shape[1], self.shape[0]
 
@@ -206,16 +211,53 @@ class BlockSparseMatrix:
         assert(self.data.is_contiguous())
         assert(out.is_contiguous())
 
-        if method == 0:
-            out2 = block_sparse_native.blocksparse_matmul_transpose_cuda(dense_a,
-                                                              self.row_start_ends_a, cols_a, self.data,
-                                                              *self.shape, *self.block_shape,
-                                                              out)
-        elif method == 1:
-            dense_a_t = dense_a.t().contiguous()
-            out2 = block_sparse_native.blocksparse_matmul_transpose_cutlass(dense_a_t,
-                                                              self.row_start_ends_a, cols_a, self.data,
-                                                              *self.shape, *self.block_shape,
-                                                              out)
+        out2 = block_sparse_native.blocksparse_matmul_transpose_cuda(dense_a,
+                                                          self.row_start_ends_a, cols_a, self.data,
+                                                          *self.shape, *self.block_shape,
+                                                          out)
+
+        return out2
+
+    def matmul(self, dense_a, method = 0):
+        """Compute a.matmul(self.t()) """
+        import block_sparse_native
+        shape_a = dense_a.shape
+        shape_b = self.shape[0], self.shape[1]
+
+        if shape_a[1] != shape_b[0]:
+            raise Exception("Invalid matrices sizes (%d, %d) x (%d, %d)" % (shape_a[0], shape_a[1], shape_b[0], shape_b[1]))
+
+        out = torch.zeros((shape_b[1], shape_a[0]), device = dense_a.device).contiguous()
+        print("stride", out.stride())
+
+        assert(dense_a.is_contiguous())
+        assert (self.row_start_ends_a.is_contiguous())
+        assert(self.data.is_contiguous())
+        assert(out.is_contiguous())
+
+        cols_a_0 = self.cols_a.contiguous()
+        print("cols_a_0", cols_a_0)
+        assert(cols_a_0.is_contiguous())
+
+        assert(self.row_start_ends_a.shape[0] == self.blocks_count()[0] + 1)
+
+        assert(self.row_start_ends_a.shape[0] == dense_a.shape[1] / self.block_shape[0] + 1)
+
+        out2 = out.t()
+        print("out stride", out.stride(), "shape", out.shape)
+        print("out2 stride", out2.stride(), "shape", out2.shape)
+
+        print("row_start_ends_a", self.row_start_ends_a)
+        print("cols_a_0", cols_a_0)
+
+        print("dtype row_start_ends_a", self.row_start_ends_a.dtype, self.row_start_ends_a.stride())
+        print("dtype cols_a_0", cols_a_0.dtype, cols_a_0.stride())
+
+        out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a,
+                                                              self.row_start_ends_a, cols_a_0,
+                                                              self.data.t().contiguous(),
+                                                              self.shape[1], self.shape[0],
+                                                              self.block_shape[1], self.block_shape[0],
+                                                              out2)
 
         return out2

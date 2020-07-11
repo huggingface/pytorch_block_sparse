@@ -27,7 +27,7 @@
 #include "util/matrix.h"
 #include "util/timer.h"
 #include "util/type_conversion.h"
-#include "util/bsc.h"
+
 
 // Dispatch routines to CUTLASS
 #include "cutlass_dispatch.h"
@@ -52,7 +52,7 @@ template <
 bool test_bsc(
     value_t* A_data,
     value_t* B_data,
-    int* B_bsc_data,
+    int* B_bsc_ptr,
     int* B_bsc_indices,
     accum_t* C_data,
     int m,          ///< Height of C in rows
@@ -61,6 +61,15 @@ bool test_bsc(
     accum_t alpha,  ///< Multiplicand scalar
     accum_t beta)
 {
+
+    typedef gemm::gemm_policy<value_t, accum_t, TransformA, TransformB, TilingStrategy> block_task_policy_t;
+
+    // matrix pruning
+    int BlockItemsN = block_task_policy_t::BlockItemsX; // depend on the block task policy
+    int BlockItemsK = block_task_policy_t::BlockItemsK;
+
+    printf("BlockItemsN=%d, BlockItemsK=%d", BlockItemsN, BlockItemsK);
+
     cudaStream_t stream = 0;
 
     test_func_t test_func;
@@ -72,7 +81,7 @@ bool test_bsc(
         k,
         A_data,
         B_data,
-        B_bsc_data,
+        B_bsc_ptr,
         B_bsc_indices,
         C_data,
         alpha,
@@ -83,12 +92,12 @@ bool test_bsc(
     return error;
 }
 
- torch::Tensor  blocksparse_matmul_transpose_cutlass(torch::Tensor dense_a,
-								      torch::Tensor row_ends_b,
-								      torch::Tensor cols_b,
+torch::Tensor  blocksparse_matmul_cutlass(torch::Tensor dense_a,
+								      torch::Tensor row_start_ends_a,
+								      torch::Tensor cols_a_0,
 								      torch::Tensor data_b,
-								      int size_rows_b,
-								      int size_cols_b,
+								      int n,
+								      int k,
 								      int block_size_rows_b,
 								      int block_size_cols_b,
 								      torch::Tensor dense_out)
@@ -104,18 +113,17 @@ bool test_bsc(
 
     value_t* A_data = (value_t*)dense_a.data_ptr();
     value_t* B_data = (value_t*)data_b.data_ptr();
-    int* B_bsc_data = (int*)cols_b.data_ptr();
-    int* B_bsc_indices = (int*)row_ends_b.data_ptr();
+    int* B_bsc_ptr = (int*)row_start_ends_a.data_ptr();
+    int* B_bsc_indices = (int*)cols_a_0.data_ptr();
     value_t* C_data = (value_t*)dense_out.data_ptr();
 
-    int m = sizes_a[1]; // A is transposed in pytorch, non_transposed in cutlass speak
-    int n = size_rows_b;
-    int k = size_cols_b;
+    int m = sizes_a[0];
 
     float alpha = 1.0;
     float beta = 0.0;
 
 // Initialize cuBLAS
+
 /*
 	if (!cublas_inited) {
 		if (cublasCreate(&g_cublas_handle) != CUBLAS_STATUS_SUCCESS)
@@ -126,6 +134,10 @@ bool test_bsc(
 		cublas_inited = true;
 	}
 */
+    printf("m = %d, n=%d, k=%d\n", m,n, k);
+    printf("br = %d, bc = %d\n", block_size_rows_b, block_size_cols_b);
+    printf("out : [%d, %d]\n", sizes_out[0], sizes_out[1]);
+
 
 	bool test_error = test_bsc<
 	cutlass_gemm_dispatch<gemm::tiling_strategy::Custom, math_op, TransformA, TransformB, value_t, accum_t>,
@@ -133,7 +145,7 @@ bool test_bsc(
 	TransformA,
 	TransformB,
 	value_t,
-	accum_t>(A_data,B_data,B_bsc_data, B_bsc_indices, C_data, m, n, k, accum_t(alpha), accum_t(beta));
+	accum_t>(A_data,B_data,B_bsc_ptr, B_bsc_indices, C_data, m, n, k, accum_t(alpha), accum_t(beta));
 
     return dense_out;
 }

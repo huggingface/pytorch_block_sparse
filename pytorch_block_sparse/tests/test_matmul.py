@@ -62,14 +62,13 @@ class TestFun(TestCase):
         return timings
 
     def helper(self, sizes, block_size, block_count = None, density = None, iterations = 1):
-        a = torch.randn((sizes[0], sizes[1]), device="cuda") #randn
-        a[::][::] = 1
+        a = torch.randn((sizes[0], sizes[1]), device="cuda")
 
         if block_count == None:
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
             block_count = int(total_block_count * density)
 
-#        block_count = 2
+        block_count = 1
 
         from pytorch_block_sparse.block_sparse import BlockSparseMatrix
         bsm = BlockSparseMatrix.rand((sizes[1], sizes[2]), block_count, block_size, device="cuda")
@@ -87,6 +86,7 @@ class TestFun(TestCase):
             end = torch.cuda.Event(enable_timing=True)
 
             start.record()
+
             for i in range(iterations):
                 if kind == "pytorch":
                     c = a.matmul(dbsm_t)
@@ -135,6 +135,9 @@ class TestFun(TestCase):
                     cs = c[::32,::32]
                     cs0 = c0[::32,::32]
 
+                    print("differences")
+                    print(((cs - cs0).abs() > 0.1).int())
+
                     print("mask")
                     print(bsm.block_mask.int())
 
@@ -167,18 +170,18 @@ class TestFun(TestCase):
                 print("time_sparse=%f, time_dense = %s" % (time_sparse, time_dense))
 
     def test1(self):
-        sizes = [2048, 2048, 2048]
-        #sizes = [128 * 2, 128 * 2, 128 * 2]
+        #sizes = [2048, 2048, 2048]
+        sizes = [128 * 2, 128 * 2, 128 * 2]
         print(sizes[0] * sizes[2])
         #sizes = [64, 16, 32]
 
         flops = float(2 * sizes[0] * sizes[1] * sizes[2])
 
         block_size = (32, 32)
-        iterations = 10
+        iterations = 1
 
         results = {}
-        for i in range(10):
+        for i in range(1):
             timings = self.helper(sizes, block_size, density = 1.0, iterations = iterations)
 
             if "pytorch" in timings:

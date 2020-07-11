@@ -20,8 +20,9 @@ torch::Tensor blocksparse_matmul_cutlass(torch::Tensor dense_a,
  												   torch::Tensor row_ends_b,
 												   torch::Tensor cols_b,
 												   torch::Tensor data_b,
-												   int size_rows_b,
-												   int size_cols_b,
+												   int m,
+												   int n,
+								                   int k,
 												   int block_size_rows_b,
 												   int block_size_cols_b,
 												   torch::Tensor dense_out);
@@ -53,13 +54,14 @@ torch::Tensor blocksparse_matmul_cutlass_(torch::Tensor dense_a_t,
                                  torch::Tensor row_ends_b,
                                  torch::Tensor cols_b,
                                  torch::Tensor data_b,
+                                 int m,
                                  int n,
 								 int k,
 								 int block_size_rows_b,
 								 int block_size_cols_b,
 								 torch::Tensor dense_out)
 {
-    return blocksparse_matmul_cutlass(dense_a_t, row_ends_b, cols_b, data_b, n, k, block_size_rows_b, block_size_cols_b, dense_out);
+    return blocksparse_matmul_cutlass(dense_a_t, row_ends_b, cols_b, data_b, m, n, k, block_size_rows_b, block_size_cols_b, dense_out);
 }
 
 

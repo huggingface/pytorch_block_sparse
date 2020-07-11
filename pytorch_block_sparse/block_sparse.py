@@ -96,7 +96,7 @@ class BlockSparseMatrix:
 
         data = torch.randn((n_blocks * block_shape[0], block_shape[1]), dtype=torch.float, device = device) # randn
 
-        data[::,::] = 1
+#        data[::,::] = 1
 
 
         return cls(shape, block_mask, data, block_shape)
@@ -253,10 +253,10 @@ class BlockSparseMatrix:
         print("dtype row_start_ends_a", self.row_start_ends_a.dtype, self.row_start_ends_a.stride())
         print("dtype cols_a_0", cols_a_0.dtype, cols_a_0.stride())
 
-        out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a,
+        out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a.t().contiguous(),
                                                               self.row_start_ends_a, cols_a_0,
-                                                              self.data.t().contiguous(),
-                                                              self.shape[1], self.shape[0],
+                                                              self.data,
+                                                              dense_a.shape[0], self.shape[1], self.shape[0],
                                                               self.block_shape[1], self.block_shape[0],
                                                               out2)
 

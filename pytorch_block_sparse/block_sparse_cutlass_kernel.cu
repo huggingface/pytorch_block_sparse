@@ -96,6 +96,7 @@ torch::Tensor  blocksparse_matmul_cutlass(torch::Tensor dense_a,
 								      torch::Tensor row_start_ends_a,
 								      torch::Tensor cols_a_0,
 								      torch::Tensor data_b,
+								      int m,
 								      int n,
 								      int k,
 								      int block_size_rows_b,
@@ -108,8 +109,8 @@ torch::Tensor  blocksparse_matmul_cutlass(torch::Tensor dense_a,
     static const matrix_transform_t::kind_t TransformA = matrix_transform_t::NonTranspose;
     static const matrix_transform_t::kind_t TransformB = matrix_transform_t::NonTranspose;
 
-    auto sizes_a = dense_a.sizes().vec();
-    auto sizes_out = dense_out.sizes().vec();
+    //auto sizes_a = dense_a.sizes().vec();
+//    auto sizes_out = dense_out.sizes().vec();
 
     value_t* A_data = (value_t*)dense_a.data_ptr();
     value_t* B_data = (value_t*)data_b.data_ptr();
@@ -117,7 +118,7 @@ torch::Tensor  blocksparse_matmul_cutlass(torch::Tensor dense_a,
     int* B_bsc_indices = (int*)cols_a_0.data_ptr();
     value_t* C_data = (value_t*)dense_out.data_ptr();
 
-    int m = sizes_a[0];
+    //int m = sizes_a[0];
 
     float alpha = 1.0;
     float beta = 0.0;
@@ -134,9 +135,9 @@ torch::Tensor  blocksparse_matmul_cutlass(torch::Tensor dense_a,
 		cublas_inited = true;
 	}
 */
-    printf("m = %d, n=%d, k=%d\n", m,n, k);
-    printf("br = %d, bc = %d\n", block_size_rows_b, block_size_cols_b);
-    printf("out : [%d, %d]\n", sizes_out[0], sizes_out[1]);
+    //printf("m = %d, n=%d, k=%d\n", m,n, k);
+    //printf("br = %d, bc = %d\n", block_size_rows_b, block_size_cols_b);
+    //printf("out : [%d, %d]\n", sizes_out[0], sizes_out[1]);
 
 
 	bool test_error = test_bsc<

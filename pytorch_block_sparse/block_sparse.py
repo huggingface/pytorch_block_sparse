@@ -220,13 +220,13 @@ class BlockSparseMatrix:
         """Compute a.matmul(self.t()) """
         import block_sparse_native
         shape_a = dense_a.shape
-        shape_b = self.shape[0], self.shape[1]
+        shape_b = self.shape[1], self.shape[0]
 
         if shape_a[1] != shape_b[0]:
             raise Exception("Invalid matrices sizes (%d, %d) x (%d, %d)" % (shape_a[0], shape_a[1], shape_b[0], shape_b[1]))
 
         out = torch.zeros((shape_b[1], shape_a[0]), device = dense_a.device).contiguous()
-        print("stride", out.stride())
+        #print("stride", out.stride())
 
         assert(dense_a.is_contiguous())
         assert (self.row_start_ends_a.is_contiguous())
@@ -235,28 +235,28 @@ class BlockSparseMatrix:
 
         assert(self.cols_a.dtype == torch.int32)
         cols_a_0 = self.cols_a
-        print("cols_a_0", cols_a_0)
+        #print("cols_a_0", cols_a_0)
         assert(cols_a_0.is_contiguous())
 
         assert(self.row_start_ends_a.shape[0] == self.blocks_count()[0] + 1)
 
-        assert(self.row_start_ends_a.shape[0] == dense_a.shape[1] / self.block_shape[0] + 1)
+        #assert(self.row_start_ends_a.shape[0] == dense_a.shape[1] / self.block_shape[0] + 1)
 
         out2 = out.t()
-        print("out stride", out.stride(), "shape", out.shape)
-        print("out2 stride", out2.stride(), "shape", out2.shape)
+        #print("out stride", out.stride(), "shape", out.shape)
+        #print("out2 stride", out2.stride(), "shape", out2.shape)
 
-        print("row_start_ends_a", self.row_start_ends_a)
-        print("cols_a_0", cols_a_0)
+        #print("row_start_ends_a", self.row_start_ends_a)
+        #print("cols_a_0", cols_a_0)
 
-        print("dtype row_start_ends_a", self.row_start_ends_a.dtype, self.row_start_ends_a.stride())
-        print("dtype cols_a_0", cols_a_0.dtype, cols_a_0.stride())
+        #print("dtype row_start_ends_a", self.row_start_ends_a.dtype, self.row_start_ends_a.stride())
+        #print("dtype cols_a_0", cols_a_0.dtype, cols_a_0.stride())
 
         out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a,
                                                               self.row_start_ends_a, cols_a_0,
                                                               self.data,
-                                                              dense_a.shape[0], self.shape[1], self.shape[0],
+                                                              dense_a.shape[0], shape_b[1], shape_b[0],
                                                               self.block_shape[1], self.block_shape[0],
                                                               out2)
 
-        return out2
+        return out2.t()

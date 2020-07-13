@@ -68,8 +68,6 @@ bool test_bsc(
     int BlockItemsN = block_task_policy_t::BlockItemsX; // depend on the block task policy
     int BlockItemsK = block_task_policy_t::BlockItemsK;
 
-    printf("BlockItemsN=%d, BlockItemsK=%d", BlockItemsN, BlockItemsK);
-
     cudaStream_t stream = 0;
 
     test_func_t test_func;

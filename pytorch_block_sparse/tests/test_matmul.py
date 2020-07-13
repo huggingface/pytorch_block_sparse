@@ -12,9 +12,7 @@ class TestFun(TestCase):
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
             block_count = int(total_block_count * density)
 
-        block_count = 1
-
-        bsm = BlockSparseMatrix.rand((sizes[1], sizes[2]), block_count, block_size, device=device)
+        bsm = BlockSparseMatrix.rand((sizes[2], sizes[1]), block_count, block_size, device=device)
         dbsm = bsm.to_dense()
         bsm.check_with_dense(dbsm)
 
@@ -27,7 +25,7 @@ class TestFun(TestCase):
 
             for i in range(iterations):
                 if kind == "pytorch":
-                    c = dbsm.matmul(a).t()
+                    c = dbsm.matmul(a.view(a.shape[1], a.shape[0]))
                 elif kind == "cutlass":
                     c = bsm.matmul(a)
                 elif kind == "cublas":
@@ -52,6 +50,7 @@ class TestFun(TestCase):
                     t["comparison"] = True
                     continue
                 c = t["result"]
+
                 s = c.isclose(c0, atol=1e-03).all()
                 if not s.item():
                     print("Comparison NOK : transposed_matmul issue for ", k)
@@ -75,17 +74,17 @@ class TestFun(TestCase):
                 print("time_sparse=%f, time_dense = %s" % (time_sparse, time_dense))
 
     def test1(self):
-        size = 2048
-        sizes = [size, size, size]
+        size = 512
+        sizes = [size * 16 * 8, size * 2, size * 4]
 
         flops = float(2 * sizes[0] * sizes[1] * sizes[2])
 
         block_size = (32, 32)
-        iterations = 10
+        iterations = 40
 
         results = {}
         for i in range(10):
-            timings = self.helper(sizes, block_size, density = 1.0, iterations = iterations)
+            timings = self.helper(sizes, block_size, density = 0.42, iterations = iterations)
 
             if "pytorch" in timings:
                 pytorch_time = timings["pytorch"]["elapsed"]

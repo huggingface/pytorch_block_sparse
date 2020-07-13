@@ -38,14 +38,14 @@ class TestFun(TestCase):
             th_data_size = block_shape[0] * block_shape[1] * nblocks
 
             assert((ptr == bsm.row_start_ends_a).all())
-            assert((indices == bsm.cols_a[:,0]).all())
+            assert((indices == bsm.cols_a).all())
 
             assert((data == bsm.data.flatten()).all())
             assert(data.shape[0] == th_data_size)
+            assert((data == bsm.data.flatten()).all())
+
             assert(data.min() == d.min())
             assert(data.max() == d.max())
-
-
 
 #        print(f"data.shape={data.shape}, data[0]={data[0]}, data[-1]={data[-1]}, data.min()={data.min()}, data.max()={data.max()}")
 

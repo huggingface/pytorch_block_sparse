@@ -68,6 +68,7 @@ class BlockSparseMatrix:
 
         row_start_ends.index_add_(0, rows + 1, torch.ones(size=(cols.shape[0],), dtype=torch.long, device = self.device))
         row_start_ends = row_start_ends.cumsum(0).int()
+        cols = cols.int()
 
         #cols = torch.stack([cols, block_shuffle], 1).int()
 
@@ -95,9 +96,6 @@ class BlockSparseMatrix:
         block_mask = block_mask.view(X, Y)
 
         data = torch.randn((n_blocks * block_shape[0], block_shape[1]), dtype=torch.float, device = device) # randn
-
-#        data[::,::] = 1
-
 
         return cls(shape, block_mask, data, block_shape)
 
@@ -235,7 +233,8 @@ class BlockSparseMatrix:
         assert(self.data.is_contiguous())
         assert(out.is_contiguous())
 
-        cols_a_0 = self.cols_a.contiguous()
+        assert(self.cols_a.dtype == torch.int32)
+        cols_a_0 = self.cols_a
         print("cols_a_0", cols_a_0)
         assert(cols_a_0.is_contiguous())
 
@@ -253,7 +252,7 @@ class BlockSparseMatrix:
         print("dtype row_start_ends_a", self.row_start_ends_a.dtype, self.row_start_ends_a.stride())
         print("dtype cols_a_0", cols_a_0.dtype, cols_a_0.stride())
 
-        out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a.t().contiguous(),
+        out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a,
                                                               self.row_start_ends_a, cols_a_0,
                                                               self.data,
                                                               dense_a.shape[0], self.shape[1], self.shape[0],

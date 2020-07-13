@@ -109,9 +109,6 @@ torch::Tensor  blocksparse_matmul_cutlass(torch::Tensor dense_a,
     static const matrix_transform_t::kind_t TransformA = matrix_transform_t::NonTranspose;
     static const matrix_transform_t::kind_t TransformB = matrix_transform_t::NonTranspose;
 
-    //auto sizes_a = dense_a.sizes().vec();
-//    auto sizes_out = dense_out.sizes().vec();
-
     value_t* A_data = (value_t*)dense_a.data_ptr();
     value_t* B_data = (value_t*)data_b.data_ptr();
     int* B_bsc_ptr = (int*)row_start_ends_a.data_ptr();
@@ -124,8 +121,6 @@ torch::Tensor  blocksparse_matmul_cutlass(torch::Tensor dense_a,
     float beta = 0.0;
 
 // Initialize cuBLAS
-
-/*
 	if (!cublas_inited) {
 		if (cublasCreate(&g_cublas_handle) != CUBLAS_STATUS_SUCCESS)
 		{
@@ -134,11 +129,6 @@ torch::Tensor  blocksparse_matmul_cutlass(torch::Tensor dense_a,
 		}
 		cublas_inited = true;
 	}
-*/
-    //printf("m = %d, n=%d, k=%d\n", m,n, k);
-    //printf("br = %d, bc = %d\n", block_size_rows_b, block_size_cols_b);
-    //printf("out : [%d, %d]\n", sizes_out[0], sizes_out[1]);
-
 
 	bool test_error = test_bsc<
 	cutlass_gemm_dispatch<gemm::tiling_strategy::Custom, math_op, TransformA, TransformB, value_t, accum_t>,

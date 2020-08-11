@@ -10,6 +10,8 @@ class TestFun(TestCase):
         device = "cuda"
         a = torch.randn((sizes[0], sizes[1]), device=device)
         b = torch.randn((sizes[0], sizes[2]), device=device)
+        print("A", a.shape)
+        print("B", b.shape)
 
         if block_count == None:
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
@@ -20,7 +22,7 @@ class TestFun(TestCase):
         bsm.check_with_dense(dbsm)
 
         timings = {}
-        for kind in ["pytorch"]:
+        for kind in ["pytorch", "cutlass"]:
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
 
@@ -29,8 +31,16 @@ class TestFun(TestCase):
             for i in range(iterations):
                 if kind == "pytorch":
                     c = b.t().mm(a)
+                    print("C", c.shape)
+                    print("C", c)
                 elif kind == "cutlass":
-                    c = bsm.matmul(a)
+                    c = bsm.matmul_back(a, b)
+                    dbsm2 = bsm.to_dense()
+
+                    print(c.shape)
+                    print(c.shape)
+                    #c = c.to_dense()
+                    print(c.data)
 
             end.record()
             torch.cuda.synchronize()
@@ -70,18 +80,20 @@ class TestFun(TestCase):
                 print("time_sparse=%f, time_dense = %s" % (time_sparse, time_dense))
 
     def test1(self):
-        size = 512
-        sizes = [size * 16 * 8, size * 2, size * 4]
-        density = 0.42
+        size = 32
+        sizes = [size * 2, size, size * 4]
+        print(sizes)
+        density = 1.0
 
         flops = float(2 * sizes[0] * sizes[1] * sizes[2])
 
         block_size = (32, 32)
-        iterations = 40
+        iterations = 1
+        inner_iterations = 1
 
         results = {}
-        for i in range(10):
-            timings = self.helper(sizes, block_size, density = density, iterations = iterations)
+        for i in range(iterations):
+            timings = self.helper(sizes, block_size, density = density, iterations = inner_iterations)
 
             if "pytorch" in timings:
                 pytorch_time = timings["pytorch"]["elapsed"]
@@ -101,7 +113,7 @@ class TestFun(TestCase):
                 else:
                     ratio = kind_elapsed / pytorch_time
 
-                print("kind = %s, elapsed=%f, gflops = %f, ratio = %s" % (kind, kind_elapsed, flops * iterations / kind_elapsed / 1e6, ratio))
+                print("kind = %s, elapsed=%f, gflops = %f, ratio = %s" % (kind, kind_elapsed, flops * inner_iterations / kind_elapsed / 1e6, ratio))
         print(results)
 
 if __name__ == '__main__':

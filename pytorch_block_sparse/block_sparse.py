@@ -268,11 +268,23 @@ class BlockSparseMatrix:
         return out2.t()
 
     def matmul_back(self, dense_a, dense_b, method=0):
-        out2 = block_sparse_native.blocksparse_matmul_back_cutlass(dense_a, dense_b,
-                                                                   self.data,
-                                                                   self.row_start_ends_a, cols_a_0,
-                                                                   dense_a.shape[0], shape_b[1], shape_b[0],
-                                                                   self.block_shape[1], self.block_shape[0],
-                                                                   out2)
+        """Compute  c = b.t().mm(a) where c is sparse (we just keep the results where c is non_zero)."""
+        import block_sparse_native
+        shape_a = dense_a.shape
+        shape_b = dense_b.shape
+        shape_c = self.shape
 
+        assert(shape_a[0] == shape_b[0])
+        assert(shape_c[0] == shape_b[1])
+        assert(shape_c[1] == shape_a[1])
+
+        print("dense_b stride", dense_b.stride())
+
+        dense_a_ = dense_a.t().contiguous()
+        out2 = block_sparse_native.blocksparse_matmul_back_cutlass(dense_b, dense_a_,
+                                                                   shape_b[1], shape_a[1], shape_a[0],
+                                                                   self.block_shape[0], self.block_shape[1],
+                                                                   self.data,
+                                                                   self.row_start_ends_a, self.cols_a,
+                                                                   )
         return self

@@ -76,6 +76,7 @@ class TestFun(TestCase):
     def test1(self):
         size = 512
         sizes = [size * 16 * 8, size * 2, size * 4]
+        density = 0.42
 
         flops = float(2 * sizes[0] * sizes[1] * sizes[2])
 
@@ -84,7 +85,7 @@ class TestFun(TestCase):
 
         results = {}
         for i in range(10):
-            timings = self.helper(sizes, block_size, density = 0.42, iterations = iterations)
+            timings = self.helper(sizes, block_size, density = density, iterations = iterations)
 
             if "pytorch" in timings:
                 pytorch_time = timings["pytorch"]["elapsed"]
@@ -94,7 +95,8 @@ class TestFun(TestCase):
             for kind, d in timings.items():
                 if kind not in results:
                     results[kind] = {True:0, False:0}
-                results[kind][d["comparison"]] += 1
+                if "comparison" in d:
+                    results[kind][d["comparison"]] += 1
 
                 kind = d["kind"]
                 kind_elapsed = d["elapsed"]

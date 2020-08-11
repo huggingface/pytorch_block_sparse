@@ -36,6 +36,7 @@
 
 #include "../util/util.h"
 #include "block_task.h"
+#include "block_task_back.h"
 #include "grid_raster.h"
 
 namespace cutlass {
@@ -61,7 +62,8 @@ struct tiling_strategy : printable_t
         Tall,
         Wide,
         Huge,
-        Custom
+        Custom,
+        CustomBack,
     };
 
     /// Enumerant value
@@ -89,6 +91,7 @@ struct tiling_strategy : printable_t
             case Wide:      return "wide";
             case Huge:      return "huge";
             case Custom:    return "Custom";
+            case CustomBack: return "CustomBack";
             case Unknown:
             default:        return "unknown";
         }
@@ -136,6 +139,22 @@ struct gemm_policy<float, float, TransformA, TransformB, tiling_strategy::Custom
         grid_raster_strategy::Default>   // _RasterStrategy
 {};
 
+/**
+ * GEMM task policy specialization for CustomBack sgemm
+ */
+template <
+    matrix_transform_t::kind_t TransformA,      ///< Transformation op for matrix A
+    matrix_transform_t::kind_t TransformB>      ///< Transformation op for matrix B
+struct gemm_policy<float, float, TransformA, TransformB, tiling_strategy::CustomBack> :
+    block_task_back_policy<
+        32,     // _BlockItemsY
+        32,     // _BlockItemsX
+        32,      // _BlockItemsK
+        4,      // _ThreadItemsY
+        4,      // _ThreadItemsX
+        false,  // _UseDoubleScratchTiles
+        grid_raster_strategy::Default>   // _RasterStrategy
+{};
 
 /**
  * GEMM task policy specialization for small sgemm

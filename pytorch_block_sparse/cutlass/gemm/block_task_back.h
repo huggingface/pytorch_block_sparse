@@ -46,13 +46,13 @@ namespace gemm {
 
 
 /******************************************************************************
- * block_task_policy
+ * block_task_back_policy
  ******************************************************************************/
 
 /**
- * \brief Parameterizable tuning policy for \p block_task
+ * \brief Parameterizable tuning policy for \p block_task_back
  *
- * Once parameterized, \p block_task_policy provides the member constant
+ * Once parameterized, \p block_task_back_policy provides the member constant
  * \p BlockThreads indicating to the required thread block size
  */
 template <
@@ -62,8 +62,8 @@ template <
     int _ThreadItemsY,                              ///< Height in rows of a thread tile in C
     int _ThreadItemsX,                              ///< Width in columns of a thread tile in C
     bool _UseDoubleScratchTiles,                    ///< Whether to halve synchronization overhead at the expense of doubled shared memory and addressing overhead
-    grid_raster_strategy::kind_t _RasterStrategy>   ///< Strategy for enumerating \p block_task within an input matrix
-struct block_task_policy
+    grid_raster_strategy::kind_t _RasterStrategy>   ///< Strategy for enumerating \p block_task_back within an input matrix
+struct block_task_back_policy
 {
     enum
     {
@@ -91,13 +91,13 @@ struct block_task_policy
                             (ThreadItemsY * ThreadItemsX)>::value,
     };
 
-    /// Strategy for enumerating \p block_task within an input matrix
+    /// Strategy for enumerating \p block_task_back within an input matrix
     static const grid_raster_strategy::kind_t RasterStrategy = _RasterStrategy;
 };
 
 
 /******************************************************************************
- * block_task
+ * block_task_back
  ******************************************************************************/
 
 /**
@@ -107,7 +107,7 @@ struct block_task_policy
  * consuming the corresponding stripes of the input matrices A and B.
  */
 template <
-    typename                    block_task_policy_t,    ///< Parameterization of block_task_policy
+    typename                    block_task_back_policy_t,    ///< Parameterization of block_task_back_policy
     typename                    value_t,                ///< Multiplicand value type (matrices A and B)
     typename                    accum_t,                ///< Accumulator value type (matrix C and scalars)
     matrix_transform_t::kind_t  TransformA,             ///< View transform enumerant for matrix A
@@ -118,7 +118,7 @@ template <
     int                         LdgAlignC,              ///< Alignment (in bytes) for C operand
     bool                        AllowRaggedTiles        ///< Whether the input matrix's dimensions need not be an even-multiple of the block-wide tile dimensions
 >
-struct block_task
+struct block_task_back
 {
     //-------------------------------------------------------------------------
     // Constants and types
@@ -127,13 +127,13 @@ struct block_task
     enum
     {
         /// Number of threads in each thread block (blockDim.x)
-        BlockThreads = block_task_policy_t::BlockThreads,
+        BlockThreads = block_task_back_policy_t::BlockThreads,
 
         /// Extent of thread tile in value_t along M-axis
-        ThreadItemsY = block_task_policy_t::ThreadItemsY,
+        ThreadItemsY = block_task_back_policy_t::ThreadItemsY,
 
         /// Extent of thread tile in value_t along N-axis
-        ThreadItemsX = block_task_policy_t::ThreadItemsX,
+        ThreadItemsX = block_task_back_policy_t::ThreadItemsX,
     };
 
     /// Accumulator type
@@ -156,16 +156,16 @@ struct block_task
         DpVectorItems = divide_assert<sizeof(dp_vector_t), sizeof(value_t)>::value, // 1 for SGEMM
 
         /// Extent of block-wide C-tile in accum_t (and A-tiles in value_t) along M-axis (height)
-        BlockItemsY = block_task_policy_t::BlockItemsY,
+        BlockItemsY = block_task_back_policy_t::BlockItemsY,
 
         /// Extent of block-wide C-tile in accum_t (and B-tiles in value_t) along N-axis (width)
-        BlockItemsX = block_task_policy_t::BlockItemsX,
+        BlockItemsX = block_task_back_policy_t::BlockItemsX,
 
         /// Extent of block-wide A|B tiles in value_t along the K-axis
-        BlockItemsK = block_task_policy_t::BlockItemsK,
+        BlockItemsK = block_task_back_policy_t::BlockItemsK,
 
         /// Whether to halve synchronization overhead at the expense of doubled shared memory and addressing overhead
-        UseDoubleScratchTiles = block_task_policy_t::UseDoubleScratchTiles,
+        UseDoubleScratchTiles = block_task_back_policy_t::UseDoubleScratchTiles,
 
         /// Extent of block-wide A|B tiles in dp_vector_t along the K-axis
         BlockDpVectorsK = divide_assert<BlockItemsK, DpVectorItems>::value,
@@ -228,7 +228,7 @@ struct block_task
             BlockItemsX,
             TransformA,
             TransformB,
-            block_task_policy_t::RasterStrategy>
+            block_task_back_policy_t::RasterStrategy>
         grid_raster_t;
 
 
@@ -241,10 +241,8 @@ struct block_task
             LdgAlignA,                                          // MatrixAlignBytes
             AllowRaggedTiles,                                   // AllowRaggedTiles
             dp_vector_t,                                        // dp_vector_t
-            (TransformA == matrix_transform_t::NonTranspose) ?  // LoadAlgorithm
-                load_algorithm::CongruousCopyPrune :
-                load_algorithm::CrosswiseCopy>
-        block_loader_a_t;
+            load_algorithm::CrosswiseCopy>                      // LoadAlgorithm
+            block_loader_a_t;
 
 
     /// Tile loader type for matrix B
@@ -256,10 +254,8 @@ struct block_task
             LdgAlignB,                                          // MatrixAlignBytes
             AllowRaggedTiles,                                   // AllowRaggedTiles
             dp_vector_t,                                        // dp_vector_t
-            (TransformB == matrix_transform_t::NonTranspose) ?  // LoadAlgorithm
-                load_algorithm::CrosswiseCopyPrune :
-                load_algorithm::CongruousCopy>
-        block_loader_b_t;
+            load_algorithm::CongruousCopy>                      // LoadAlgorithm
+            block_loader_b_t;
 
 
     enum
@@ -412,13 +408,13 @@ struct block_task
 
     /// Constructor
     inline __device__
-    block_task(
+    block_task_back(
         scratch_storage_t *scratch,
         value_t *d_a,
         value_t *d_b,
-        int     *d_ptr,
-        int     *d_indices,
         accum_t *d_c,
+        int     *d_c_ptr,
+        int     *d_c_indices,
         epilogue_op_t epilogue_op,
         int dim_m,
         int dim_n,
@@ -444,26 +440,23 @@ struct block_task
 
         loader_a(
             d_a,                                                            // d_matrix
-            d_ptr,                                                          // d_ptr
-            d_indices,                                                      // d_indices,
             dim_m,                                                          // matrix_values_l
             (TransformA == matrix_transform_t::NonTranspose) ? dim_m : 1,   // matrix_values_stride_k
             (TransformA == matrix_transform_t::NonTranspose) ? 1 : dim_k,   // matrix_values_stride_l
-            grid_raster.block_item_coords.x / BlockItemsX,                  // BlockIdX, block index in x dim
             make_int2(                                                      // block_begin_item_coords
                 grid_raster.block_item_coords.y,
                 block_item_coords_k),
             block_end_item_k),                                              // block_end_item_k
 
+//            d_c_ptr,                                                          // d_ptr
+//            d_c_indices,                                                      // d_indices,
 
-
+        // TODO : check this
         loader_b(
             d_b,                                                            // d_matrix
-            d_ptr,                                                          // d_ptr
-            d_indices,                                                      // d_indices
             dim_n,                                                          // matrix_values_l
             (TransformB == matrix_transform_t::NonTranspose) ? 1 : dim_n,   // matrix_values_stride_k
-            grid_raster.block_item_coords.x / BlockItemsX,                  // BlockIdX, block index in x dim
+            (TransformB == matrix_transform_t::NonTranspose) ? dim_k : 1,   // matrix_values_stride_l
             make_int2(                                                      // block_begin_item_coords
                 grid_raster.block_item_coords.x,
                 block_item_coords_k),

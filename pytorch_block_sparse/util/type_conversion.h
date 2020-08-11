@@ -82,17 +82,17 @@ struct integer_alias<double> {
  ******************************************************************************/
 
 /// Returns a string to prefix 'gemm' to construct CUBLAS-like kernel names
-template <math_operation_class_t math_op, typename value_t, typename accum_t> char const *to_prefix_string();
+template <math_operation_class_t math_op, typename value_t, typename accum_t> inline char const *to_prefix_string();
 
-template <> char const *to_prefix_string<math_operation_class_t::scalar, float, float>() {
+template <> inline char const *to_prefix_string<math_operation_class_t::scalar, float, float>() {
     return "S";
 }
 
-template <> char const *to_prefix_string<math_operation_class_t::scalar, double, double>() {
+template <> inline char const *to_prefix_string<math_operation_class_t::scalar, double, double>() {
     return "D";
 }
 
-template <> char const *to_prefix_string<math_operation_class_t::scalar, int8_t, int32_t>() {
+template <> inline char const *to_prefix_string<math_operation_class_t::scalar, int8_t, int32_t>() {
     return "I";
 }
 

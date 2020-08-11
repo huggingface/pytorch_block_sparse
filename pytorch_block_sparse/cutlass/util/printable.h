@@ -60,7 +60,7 @@ struct printable_t
 
 
 /// Insert the formatted \p printable into the output stream
-std::ostream& operator<<(
+inline std::ostream& operator<<(
     std::ostream& out,
     printable_t const& printable)
 {

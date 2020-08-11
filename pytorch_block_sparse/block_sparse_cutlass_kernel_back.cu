@@ -36,8 +36,8 @@ using namespace std;
 using namespace cutlass;
 
 
-cublasHandle_t g_cublas_handle;
-bool cublas_inited = false;
+extern cublasHandle_t g_cublas_handle;
+extern bool cublas_inited;
 
 /**
  * Compute C = (alpha * A * B) + (beta * C)
@@ -49,7 +49,7 @@ template <
     matrix_transform_t::kind_t      TransformB,     ///< Transformation op for matrix B
     typename                        value_t,        ///< Multiplicand value type (matrices A and B)
     typename                        accum_t>        ///< Accumulator value type (matrix C and scalars)
-bool test_bsc(
+bool test_bsc_back(
     value_t* A_data,
     value_t* B_data,
     accum_t* C_data,
@@ -90,17 +90,17 @@ bool test_bsc(
     return error;
 }
 
-torch::Tensor  blocksparse_matmul_cutlass(torch::Tensor dense_a,
-  								          torch::Tensor dense_b,
-								          int m,
-								          int n,
-								          int k,
-								          int block_size_rows_b,
-								          int block_size_cols_b,
-								          torch::Tensor sparse_c,
-									      torch::Tensor sparse_c_row_start_ends_a,
-						    		      torch::Tensor sparse_c_cols_a_0
-								          )
+torch::Tensor  blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
+											  torch::Tensor dense_b,
+											  int m,
+											  int n,
+											  int k,
+											  int block_size_rows_b,
+											  int block_size_cols_b,
+											  torch::Tensor sparse_c,
+											  torch::Tensor sparse_c_row_start_ends_a,
+											  torch::Tensor sparse_c_cols_a_0
+											  )
 {
     typedef float       value_t;
 	typedef float       accum_t;
@@ -129,7 +129,7 @@ torch::Tensor  blocksparse_matmul_cutlass(torch::Tensor dense_a,
 		cublas_inited = true;
 	}
 
-	bool test_error = test_bsc<
+	bool test_error = test_bsc_back<
 	cutlass_gemm_dispatch_back<gemm::tiling_strategy::Custom, math_op, TransformA, TransformB, value_t, accum_t>,
 	gemm::tiling_strategy::CustomBack,
 	TransformA,

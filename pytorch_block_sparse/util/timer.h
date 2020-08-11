@@ -90,14 +90,14 @@ struct gpu_timer
 #ifdef _WIN32
     #include <windows.h>
 
-    void sleep_millis(unsigned milliseconds)
+    inline void sleep_millis(unsigned milliseconds)
     {
         Sleep(milliseconds);
     }
 #else
     #include <unistd.h>
 
-    void sleep_millis(unsigned milliseconds)
+    inline void sleep_millis(unsigned milliseconds)
     {
         usleep(milliseconds * 1000); // takes microseconds
     }

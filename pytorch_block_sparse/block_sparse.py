@@ -80,9 +80,9 @@ class BlockSparseMatrix:
         self.rows_b, self.col_start_ends_b  = self.build_indices_(nnz, True)
 
     @classmethod
-    def rand(cls, shape, n_blocks, block_shape=(16, 16), device = None):
-        if len(shape) != 2 or shape[0] % 16 != 0 or shape[1] % 16 != 0:
-            raise Exception("shape should be a tuple of 2 multiples of 16")
+    def zero(cls, shape, n_blocks, block_shape=(32, 32), device = None):
+        if len(shape) != 2 or shape[0] % block_shape[0] != 0 or shape[1] % block_shape[1] != 0:
+            raise Exception("shape should be a tuple of 2 multiples of block_shape")
 
         X, Y = cls.blocks_count_(shape, block_shape)
 
@@ -98,6 +98,12 @@ class BlockSparseMatrix:
         data = torch.randn((n_blocks * block_shape[0], block_shape[1]), dtype=torch.float, device = device) # randn
 
         return cls(shape, block_mask, data, block_shape)
+
+    @classmethod
+    def randn(cls, shape, n_blocks, block_shape=(32, 32), device = None):
+        ret = cls.zero(shape, n_blocks, block_shape, device)
+        torch.randn(out=ret.data)
+        return ret
 
     def __repr__(self):
         return "%s(shape=%s, cols=%s, row_start_ends_a=%s, data=%s, block_shape=%s)" % (self.__class__.__name__,
@@ -260,3 +266,13 @@ class BlockSparseMatrix:
                                                               out2)
 
         return out2.t()
+
+    def matmul_back(self, dense_a, dense_b, method=0):
+        out2 = block_sparse_native.blocksparse_matmul_back_cutlass(dense_a, dense_b,
+                                                                   self.data,
+                                                                   self.row_start_ends_a, cols_a_0,
+                                                                   dense_a.shape[0], shape_b[1], shape_b[0],
+                                                                   self.block_shape[1], self.block_shape[0],
+                                                                   out2)
+
+        return self

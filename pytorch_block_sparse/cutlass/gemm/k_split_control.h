@@ -61,7 +61,7 @@ __device__ int d_flags_split_k[NumFlagsSplitK];
 /**
  * Preparation kernel for zero-initializing semaphore flags
  */
-__global__ void prepare_kernel(int *d_flags_split_k)
+__global__ inline void prepare_kernel(int *d_flags_split_k)
 {
     int tid = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (tid < NumFlagsSplitK)

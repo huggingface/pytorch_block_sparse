@@ -138,3 +138,5 @@ torch::Tensor  blocksparse_matmul_cutlass(torch::Tensor dense_a,
 
     return dense_out;
 }
+
+

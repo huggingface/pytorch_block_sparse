@@ -148,7 +148,7 @@ __global__ void empty_kernel(void) { }
 /**
  * \brief Retrieves the PTX version that will be used on the current device (major * 100 + minor * 10)
  */
-cudaError_t ptx_version(int &version)
+inline cudaError_t ptx_version(int &version)
 {
     struct Dummy
     {
@@ -178,7 +178,7 @@ cudaError_t ptx_version(int &version)
 /**
  * \brief Retrieves the SM version (major * 100 + minor * 10) for the current device
  */
-cudaError_t get_sm_version(int &sm_version)
+inline cudaError_t get_sm_version(int &sm_version)
 {
     cudaError_t error = cudaSuccess;
 
@@ -202,7 +202,7 @@ cudaError_t get_sm_version(int &sm_version)
 /**
  * \brief Retrieves the count for the current device
  */
-cudaError_t get_sm_count(int &sm_count)
+inline cudaError_t get_sm_count(int &sm_count)
 {
     cudaError_t error = cudaSuccess;
 

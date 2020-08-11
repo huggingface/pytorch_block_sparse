@@ -27,6 +27,18 @@ torch::Tensor blocksparse_matmul_cutlass(torch::Tensor dense_a,
 												   int block_size_cols_b,
 												   torch::Tensor dense_out);
 
+torch::Tensor  blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
+											  torch::Tensor dense_b,
+											  int m,
+											  int n,
+											  int k,
+											  int block_size_rows_b,
+											  int block_size_cols_b,
+											  torch::Tensor sparse_c,
+											  torch::Tensor sparse_c_row_start_ends_a,
+											  torch::Tensor sparse_c_cols_a_0
+											  );
+
 
 torch::Tensor blocksparse_matmul_transpose_cuda_(torch::Tensor dense_a,
 												torch::Tensor row_ends_b,
@@ -64,10 +76,26 @@ torch::Tensor blocksparse_matmul_cutlass_(torch::Tensor dense_a_t,
     return blocksparse_matmul_cutlass(dense_a_t, row_ends_b, cols_b, data_b, m, n, k, block_size_rows_b, block_size_cols_b, dense_out);
 }
 
+torch::Tensor  blocksparse_matmul_back_cutlass_(torch::Tensor dense_a,
+											  torch::Tensor dense_b,
+											  int m,
+											  int n,
+											  int k,
+											  int block_size_rows_b,
+											  int block_size_cols_b,
+											  torch::Tensor sparse_c,
+											  torch::Tensor sparse_c_row_start_ends_a,
+											  torch::Tensor sparse_c_cols_a_0
+											  )
+{
+   return blocksparse_matmul_back_cutlass(dense_a, dense_b, m, n, k, block_size_rows_b, block_size_cols_b, sparse_c, sparse_c_row_start_ends_a, sparse_c_cols_a_0);
+}
+
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("blocksparse_matmul_transpose_cuda", &blocksparse_matmul_transpose_cuda_, "blocksparse_matmul_transpose_cuda");
   //m.def("blocksparse_matmul_transpose_cublas_dense", &blocksparse_matmul_transpose_cublas_dense_, "blocksparse_matmul_transpose_cublas_dense");
   m.def("blocksparse_matmul_cutlass", &blocksparse_matmul_cutlass_, "blocksparse_matmul_cutlass");
+  m.def("blocksparse_matmul_back_cutlass", &blocksparse_matmul_back_cutlass_, "blocksparse_matmul_back_cutlass");
 
 }

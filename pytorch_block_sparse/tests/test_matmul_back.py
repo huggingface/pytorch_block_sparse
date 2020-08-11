@@ -2,22 +2,25 @@ from unittest import TestCase
 import torch
 import unittest
 from pytorch_block_sparse.block_sparse import BlockSparseMatrix
+from torch.autograd import gradcheck
+
 
 class TestFun(TestCase):
     def helper(self, sizes, block_size, block_count = None, density = None, iterations = 1):
         device = "cuda"
         a = torch.randn((sizes[0], sizes[1]), device=device)
+        b = torch.randn((sizes[0], sizes[2]), device=device)
 
         if block_count == None:
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
             block_count = int(total_block_count * density)
 
-        bsm = BlockSparseMatrix.randn((sizes[2], sizes[1]), block_count, block_size, device=device)
+        bsm = BlockSparseMatrix.zero((sizes[2], sizes[1]), block_count, block_size, device=device)
         dbsm = bsm.to_dense()
         bsm.check_with_dense(dbsm)
 
         timings = {}
-        for kind in ["cutlass", "pytorch"]:
+        for kind in ["pytorch"]:
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
 
@@ -25,16 +28,9 @@ class TestFun(TestCase):
 
             for i in range(iterations):
                 if kind == "pytorch":
-                    c = dbsm.matmul(a.view(a.shape[1], a.shape[0]))
+                    c = b.t().mm(a)
                 elif kind == "cutlass":
                     c = bsm.matmul(a)
-                elif kind == "cublas":
-                    import block_sparse_native
-                    prr = torch.zeros((sizes[2], sizes[0]), device="cuda")
-                    prr = prr.t()
-                    cs = block_sparse_native.blocksparse_matmul_transpose_dense(a, dbsm, prr)
-                elif kind == "cuda":
-                    c = bsm.transposed_matmul(a)
 
             end.record()
             torch.cuda.synchronize()

@@ -293,10 +293,10 @@ class BlockSparseMatrix:
 
 
 
-        print("dense_a")
-        print_sub_matrice(dense_a)
-        print("dense_b")
-        print_sub_matrice(dense_b)
+        #print("dense_a")
+        #print_sub_matrice(dense_a)
+        #print("dense_b")
+        #print_sub_matrice(dense_b)
 
         assert(shape_a[1] == shape_b[0])
         assert(shape_c[0] == shape_a[0])
@@ -304,11 +304,14 @@ class BlockSparseMatrix:
 
         print("dense_b stride", dense_b.stride())
 
+        data = torch.zeros(shape_b[1], shape_a[0], device = dense_a.device, dtype = dense_a.dtype)
+
         out2 = block_sparse_native.blocksparse_matmul_back_cutlass(dense_a, dense_b,
                                                                    shape_a[0], shape_b[1], shape_a[1],
                                                                    self.block_shape[0], self.block_shape[1],
-                                                                   self.data,
+                                                                   data,
                                                                    self.row_start_ends_a, self.cols_a,
                                                                    )
         #self.data = self.data.t().reshape(self.data.shape)
+        self.data = data
         return self

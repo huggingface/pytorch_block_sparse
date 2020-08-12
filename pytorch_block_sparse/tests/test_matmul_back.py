@@ -31,17 +31,18 @@ class TestFun(TestCase):
                 if kind == "pytorch":
                     c = b.t().mm(a)
                     result = c
-                    print("C PYTORCH", c)
                 elif kind == "cutlass":
                     c = bsm.matmul_support(b.t().contiguous(), a)
-                    dbsm2 = bsm.to_dense()
+#                    dbsm2 = bsm.to_dense()
 
-                    print("C cutlass", c.data)
-                    result = c.data
+                    print("c.data.shape", c.data.shape)
+                    result = c.data.t()
                     #for r in c.data:
                     #    print(r)
                     #c = c.to_dense()
 #                    print("C data", c.data)
+
+            print("C ", kind, result)
 
             end.record()
             torch.cuda.synchronize()
@@ -71,10 +72,13 @@ class TestFun(TestCase):
                     t["comparison"] = True
 
         r = (timings["pytorch"]["result"] - timings["cutlass"]["result"]).abs() < 0.0001
-        print("matching", r.nonzero())
+        torch.set_printoptions(profile="full")
+        print("matching")
+        #print(r.long())
+        print(r.all())
+        torch.set_printoptions(profile="default")
 
-        print(timings["pytorch"]["result"].shape)
-        print(timings["cutlass"]["result"].shape)
+        print("output shape", timings["pytorch"]["result"].shape)
 
         return timings
 
@@ -90,7 +94,8 @@ class TestFun(TestCase):
 
     def test1(self):
         size = 32
-        sizes = [size * 2, size, size * 4]
+        sizes = [size * 2, size * 4, size * 8]
+        print("size", sizes)
         density = 1.0
 
         flops = float(2 * sizes[0] * sizes[1] * sizes[2])

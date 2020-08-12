@@ -105,14 +105,15 @@ torch::Tensor  blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
     typedef float       value_t;
 	typedef float       accum_t;
 	const math_operation_class_t math_op = math_operation_class_t::scalar;
-    static const matrix_transform_t::kind_t TransformA = matrix_transform_t::NonTranspose;
-    static const matrix_transform_t::kind_t TransformB = matrix_transform_t::NonTranspose;
+    static const matrix_transform_t::kind_t TransformA = matrix_transform_t::Transpose;
+    static const matrix_transform_t::kind_t TransformB = matrix_transform_t::Transpose;
 
     value_t* A_data = (value_t*)dense_a.data_ptr();
     value_t* B_data = (value_t*)dense_b.data_ptr();
     value_t* C_data = (value_t*)sparse_c.data_ptr();
     int* C_bsc_ptr = (int*)sparse_c_row_start_ends_a.data_ptr();
     int* C_bsc_indices = (int*)sparse_c_cols_a_0.data_ptr();
+
 
     //int m = sizes_a[0];
 

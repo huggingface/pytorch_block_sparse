@@ -267,24 +267,48 @@ class BlockSparseMatrix:
 
         return out2.t()
 
-    def matmul_back(self, dense_a, dense_b, method=0):
-        """Compute  c = b.t().mm(a) where c is sparse (we just keep the results where c is non_zero)."""
+    def matmul_support(self, dense_a, dense_b, method=0):
+        """Compute  c = a.mm(b) where c is sparse (we just keep the results where c is non_zero)."""
         import block_sparse_native
         shape_a = dense_a.shape
         shape_b = dense_b.shape
         shape_c = self.shape
 
-        assert(shape_a[0] == shape_b[0])
-        assert(shape_c[0] == shape_b[1])
-        assert(shape_c[1] == shape_a[1])
+        print("dense_a shape", shape_a)
+        print("dense_b shape", shape_b)
+        print("sparse_c shape", shape_c)
+
+        def print_sub_matrice(m):
+            for i in range(0, m.shape[0], 32):
+                for offset_x in range(32):
+                    for j in range(0, m.shape[1], 32):
+                        if j != 0:
+                            print("... ", end="")
+                        for offset_y in range(32):
+                            print("%+0.6f " % m[i + offset_x][j + offset_y].item(), end = "")
+                    print()
+                print("...")
+            print()
+            print()
+
+
+
+        print("dense_a")
+        print_sub_matrice(dense_a)
+        print("dense_b")
+        print_sub_matrice(dense_b)
+
+        assert(shape_a[1] == shape_b[0])
+        assert(shape_c[0] == shape_a[0])
+        assert(shape_c[1] == shape_b[1])
 
         print("dense_b stride", dense_b.stride())
 
-        dense_a_ = dense_a.t().contiguous()
-        out2 = block_sparse_native.blocksparse_matmul_back_cutlass(dense_b, dense_a_,
-                                                                   shape_b[1], shape_a[1], shape_a[0],
+        out2 = block_sparse_native.blocksparse_matmul_back_cutlass(dense_a, dense_b,
+                                                                   shape_a[0], shape_b[1], shape_a[1],
                                                                    self.block_shape[0], self.block_shape[1],
                                                                    self.data,
                                                                    self.row_start_ends_a, self.cols_a,
                                                                    )
+        #self.data = self.data.t().reshape(self.data.shape)
         return self

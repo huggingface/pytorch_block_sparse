@@ -102,7 +102,7 @@ class BlockSparseMatrix:
     @classmethod
     def randn(cls, shape, n_blocks, block_shape=(32, 32), device = None):
         ret = cls.zero(shape, n_blocks, block_shape, device)
-        torch.randn(out=ret.data)
+        torch.randn(ret.data.shape, out=ret.data)
         return ret
 
     def __repr__(self):
@@ -274,9 +274,10 @@ class BlockSparseMatrix:
         shape_b = dense_b.shape
         shape_c = self.shape
 
-        print("dense_a shape", shape_a)
-        print("dense_b shape", shape_b)
-        print("sparse_c shape", shape_c)
+        if False:
+            print("dense_a shape", shape_a)
+            print("dense_b shape", shape_b)
+            print("sparse_c shape", shape_c)
 
         def print_sub_matrice(m):
             for i in range(0, m.shape[0], 32):
@@ -302,9 +303,10 @@ class BlockSparseMatrix:
         assert(shape_c[0] == shape_a[0])
         assert(shape_c[1] == shape_b[1])
 
-        print("dense_b stride", dense_b.stride())
+        #print("dense_b stride", dense_b.stride())
 
-        data = torch.zeros(shape_b[1], shape_a[0], device = dense_a.device, dtype = dense_a.dtype)
+        #data = torch.zeros(shape_b[1], shape_a[0], device = dense_a.device, dtype = dense_a.dtype)
+        data = self.data
 
         out2 = block_sparse_native.blocksparse_matmul_back_cutlass(dense_a, dense_b,
                                                                    shape_a[0], shape_b[1], shape_a[1],
@@ -313,5 +315,5 @@ class BlockSparseMatrix:
                                                                    self.row_start_ends_a, self.cols_a,
                                                                    )
         #self.data = self.data.t().reshape(self.data.shape)
-        self.data = data
+        self.data = data.view(shape_b[1], shape_a[0])
         return self

@@ -36,7 +36,7 @@
 
 #include "../util/util.h"
 
-#include "grid_raster_sparse.h"
+#include "grid_raster.h"
 #include "block_loader.h"
 #include "k_split_control.h"
 #include "thread_accumulator.h"
@@ -62,7 +62,7 @@ template <
     int _ThreadItemsY,                              ///< Height in rows of a thread tile in C
     int _ThreadItemsX,                              ///< Width in columns of a thread tile in C
     bool _UseDoubleScratchTiles,                    ///< Whether to halve synchronization overhead at the expense of doubled shared memory and addressing overhead
-    grid_raster_sparse_strategy::kind_t _RasterStrategy>   ///< Strategy for enumerating \p block_task_back within an input matrix
+    grid_raster_strategy::kind_t _RasterStrategy>   ///< Strategy for enumerating \p block_task_back within an input matrix
 struct block_task_back_policy
 {
     enum
@@ -92,7 +92,7 @@ struct block_task_back_policy
     };
 
     /// Strategy for enumerating \p block_task_back within an input matrix
-    static const grid_raster_sparse_strategy::kind_t RasterStrategy = _RasterStrategy;
+    static const grid_raster_strategy::kind_t RasterStrategy = _RasterStrategy;
 };
 
 
@@ -223,13 +223,13 @@ struct block_task_back
     typedef io_vector<dp_vector_t, LdsVectorDpVectorsB> lds_vector_b_t;
 
     /// Thread block rasterization helper type
-    typedef grid_raster_sparse<
+    typedef grid_raster<
             BlockItemsY,
             BlockItemsX,
             TransformA,
             TransformB,
             block_task_back_policy_t::RasterStrategy>
-        grid_raster_sparse_t;
+        grid_raster_t;
 
 
     /// Tile loader type for matrix A
@@ -314,6 +314,9 @@ struct block_task_back
     /// Which page of scratch tiles we're currently reading from
     int page_idx;
 
+    value_t *d_a;
+    value_t *d_b;
+
     /// Pointer to matrix C
     accum_t *d_c;
 
@@ -330,7 +333,7 @@ struct block_task_back
     k_split_control k_split;
 
     /// Thread block's base value_t coordinates (m, n) in matrix C
-    grid_raster_sparse_t grid_raster_sparse;
+    grid_raster_t grid_raster;
 
     /// Thread block's current coordinate (k) within A|B matrices
     int block_item_coords_k;
@@ -366,7 +369,7 @@ struct block_task_back
     thread_accumulator_t accumulator;
 
     /// Block index in x-dim
-    //int BlockIdX;
+    int BlockIdX;
 
     /// Extent of Block in tiles 
     int BlockTiles;
@@ -423,6 +426,8 @@ struct block_task_back
     :
         scratch(scratch),
         page_idx(0),
+        d_a(d_a),
+        d_b(d_b),
         d_c(d_c),
         epilogue_op(epilogue_op),
         dim_m(dim_m),
@@ -434,9 +439,7 @@ struct block_task_back
         warp_thread_coords(thread_coords()),
         thread_strip_offset_a((warp_thread_coords.y * LdsVectorDpVectorsA) + (block_warp_coords.y * WarpItemsY)),
         thread_strip_offset_b((warp_thread_coords.x * LdsVectorDpVectorsB) + (block_warp_coords.x * WarpItemsX)),
-        // TODO
-        grid_raster_sparse(NULL, 100),
-        //BlockIdX(grid_raster_sparse.block_item_coords_src.x / BlockItemsX),
+        BlockIdX(grid_raster.block_item_coords.x / BlockItemsX),
         // BlockTiles(d_ptr[grid_raster.block_item_coords.x / BlockItemsX + 1] - d_ptr[grid_raster.block_item_coords.x / BlockItemsX]),
         tile_order(0),
 
@@ -446,7 +449,7 @@ struct block_task_back
             (TransformA == matrix_transform_t::NonTranspose) ? dim_m : 1,   // matrix_values_stride_k
             (TransformA == matrix_transform_t::NonTranspose) ? 1 : dim_k,   // matrix_values_stride_l
             make_int2(                                                      // block_begin_item_coords
-                grid_raster_sparse.block_item_coords_src.y,
+                grid_raster.block_item_coords.y,
                 block_item_coords_k),
             block_end_item_k),                                              // block_end_item_k
 
@@ -459,7 +462,7 @@ struct block_task_back
             (TransformB == matrix_transform_t::NonTranspose) ? 1 : dim_n,   // matrix_values_stride_k
             (TransformB == matrix_transform_t::NonTranspose) ? dim_k : 1,   // matrix_values_stride_l
             make_int2(                                                      // block_begin_item_coords
-                grid_raster_sparse.block_item_coords_src.x,
+                grid_raster.block_item_coords.x,
                 block_item_coords_k),
             block_end_item_k),                                              // block_end_item_k
 
@@ -537,9 +540,8 @@ struct block_task_back
                 int thread_item_coords_tile_x = thread_strip_offset_b + (thread_strip_b * WarpThreadsX * LdsVectorDpVectorsB) + (x % LdsVectorDpVectorsB);
                 int thread_item_coords_tile_y = thread_strip_offset_a + (thread_strip_a * WarpThreadsY * LdsVectorDpVectorsA) + (y % LdsVectorDpVectorsA);
 
-                // TODO
-                int c_idx = 0; //(grid_raster.block_item_coords.x + thread_item_coords_tile_x) * dim_m +
-                    //grid_raster.block_item_coords.y + thread_item_coords_tile_y;
+                int c_idx = (grid_raster.block_item_coords.x + thread_item_coords_tile_x) * dim_m +
+                    grid_raster.block_item_coords.y + thread_item_coords_tile_y;
 
                 accum_t *my_c = d_c + c_idx;
 
@@ -549,10 +551,8 @@ struct block_task_back
                     accum_t c_slice = accum_t(0);
                     accum_t *c_ptr = my_c + i;
 
-                    // TODO
-                    //if ((grid_raster.block_item_coords.x + thread_item_coords_tile_x) < dim_n &&
-                    //    (grid_raster.block_item_coords.y + thread_item_coords_tile_y + i) < dim_m)
-                    if (1)
+                    if ((grid_raster.block_item_coords.x + thread_item_coords_tile_x) < dim_n &&
+                        (grid_raster.block_item_coords.y + thread_item_coords_tile_y + i) < dim_m)
                     {
                         if (must_init_addend)
                         {
@@ -658,10 +658,14 @@ struct block_task_back
 
         
         // Quit if the thread block is fully out-of-bounds
-        if (grid_raster_sparse.is_block_oob(dim_m, dim_n))
+        if (grid_raster.is_block_oob(dim_m, dim_n))
         {
             asm volatile("exit;");
         }
+
+        //printf("A_data, %0.4f, %0.4f\n", d_a[0], d_a[1]);
+        //printf("B_data, %0.4f, %0.4f\n", d_b[0], d_b[1]);
+
 
         // Request global prefetch of first tile
         loader_a.request();

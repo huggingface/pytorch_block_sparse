@@ -38,6 +38,7 @@
 #include "block_task.h"
 #include "block_task_back.h"
 #include "grid_raster.h"
+#include "grid_raster_sparse.h"
 
 namespace cutlass {
 namespace gemm {
@@ -153,7 +154,7 @@ struct gemm_policy<float, float, TransformA, TransformB, tiling_strategy::Custom
         4,      // _ThreadItemsY
         4,      // _ThreadItemsX
         false,  // _UseDoubleScratchTiles
-        grid_raster_strategy::Default>   // _RasterStrategy
+        grid_raster_sparse_strategy::Sparse>   // _RasterStrategy
 {};
 
 /**

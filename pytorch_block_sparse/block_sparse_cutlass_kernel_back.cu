@@ -131,7 +131,7 @@ torch::Tensor  blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
 	}
 
 	bool test_error = test_bsc_back<
-	cutlass_gemm_dispatch_back<gemm::tiling_strategy::Custom, math_op, TransformA, TransformB, value_t, accum_t>,
+	cutlass_gemm_dispatch_back<gemm::tiling_strategy::CustomBack, math_op, TransformA, TransformB, value_t, accum_t>,
 	gemm::tiling_strategy::CustomBack,
 	TransformA,
 	TransformB,

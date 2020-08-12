@@ -36,7 +36,7 @@
 
 #include "../util/util.h"
 #include "block_task_back.h"
-#include "grid_raster_sparse.h"
+#include "grid_raster.h"
 #include "dispatch_policies.h"
 #include "k_split_control.h"
 
@@ -106,7 +106,7 @@ struct param_pack_back
 /// Conditional selection for block task
 template <
     math_operation_class_t      math_op,            ///<
-    typename                    block_task_back_policy_t,  ///< Parameterization of block_task_back_policy_t
+    typename                    block_task_policy_t,  ///< Parameterization of block_task_policy
     typename                    value_t,            ///< Multiplicand value type (matrices A and B)
     typename                    accum_t,            ///< Accumulator value type (matrix C and scalars)
     matrix_transform_t::kind_t  TransformA,         ///< View transform enumerant for matrix A
@@ -121,7 +121,7 @@ struct gemm_block_task_back;
 
 /// Scalar math operations
 template <
-    typename                    block_task_back_policy_t,  ///< Parameterization of block_task_back_policy_t
+    typename                    block_task_policy_t,  ///< Parameterization of block_task_policy
     typename                    value_t,            ///< Multiplicand value type (matrices A and B)
     typename                    accum_t,            ///< Accumulator value type (matrix C and scalars)
     matrix_transform_t::kind_t  TransformA,         ///< View transform enumerant for matrix A
@@ -134,7 +134,7 @@ template <
 >
 struct gemm_block_task_back<
     math_operation_class_t::scalar,
-    block_task_back_policy_t,
+    block_task_policy_t,
     value_t,
     accum_t,
     TransformA,
@@ -148,7 +148,7 @@ struct gemm_block_task_back<
 {
     // Parameterize task type
     typedef block_task_back<
-            block_task_back_policy_t,
+            block_task_policy_t,
             value_t,
             accum_t,
             TransformA,
@@ -173,7 +173,7 @@ struct gemm_block_task_back<
  */
 template <
     math_operation_class_t      math_op,            ///< Indicates which class of math operation to select
-    typename                    block_task_back_policy_t,  ///< Parameterization of block_task_back_policy_t
+    typename                    block_task_policy_t,  ///< Parameterization of block_task_policy
     matrix_transform_t::kind_t  TransformA,         ///< Transformation op for matrix A
     int                         LdgAlignA,          ///< Alignment of A matrix elements in bytes
     matrix_transform_t::kind_t  TransformB,         ///< Transformation op for matrix B
@@ -188,7 +188,7 @@ __global__ void kernel(param_pack_back<value_t, accum_t, epilogue_op_t> pack)
     // Parameterize task type
     typedef typename gemm_block_task_back<
         math_op,
-        block_task_back_policy_t,
+        block_task_policy_t,
         value_t,
         accum_t,
         TransformA,
@@ -292,7 +292,7 @@ struct launch_configuration_back
  */
 template <
     math_operation_class_t      math_op,            ///< Indicates which class of math operation to select
-    typename                    block_task_back_policy_t,  ///< Parameterization of block_task_back_policy_t
+    typename                    block_task_policy_t,  ///< Parameterization of block_task_policy
     matrix_transform_t::kind_t  TransformA,         ///< Transformation op for matrix A
     int                         LdgAlignA,          ///< Alignment of A matrix elements in bytes
     matrix_transform_t::kind_t  TransformB,         ///< Transformation op for matrix B
@@ -320,18 +320,18 @@ launch_configuration_back dispatch_back(
                                                     ///  to the console if DEBUG is defined.  Default is \p false.
 {
     // Thread block rasterization type
-    typedef grid_raster_sparse<
-            block_task_back_policy_t::BlockItemsY,
-            block_task_back_policy_t::BlockItemsX,
+    typedef grid_raster<
+            block_task_policy_t::BlockItemsY,
+            block_task_policy_t::BlockItemsX,
             TransformA,
             TransformB,
-            block_task_back_policy_t::RasterStrategy>
-        grid_raster_sparse_t;
+            block_task_policy_t::RasterStrategy>
+        grid_raster_t;
 
     launch_configuration_back config;
 
     // Compute block dims
-    config.block = dim3(block_task_back_policy_t::BlockThreads);// dim3(block_task_back_policy_t::BlockThreads); //only x dim has value
+    config.block = dim3(block_task_policy_t::BlockThreads);// dim3(block_task_policy_t::BlockThreads); //only x dim has value
 
     // Compute shared memory
     int dynamic_smem_bytes = 0;
@@ -348,8 +348,7 @@ launch_configuration_back dispatch_back(
     }
 
     // Compute grid extents
-    // TODO : replace 0
-    config.grid = grid_raster_sparse_t::grid_dims(0);
+    config.grid = grid_raster_t::grid_dims(m, n);
     // printf("grid (x, y, z) = (%d, %d, %d) \n", config.grid.x, config.grid.y, config.grid.z);
 
     // Get SM count
@@ -368,7 +367,7 @@ launch_configuration_back dispatch_back(
         sm_count,
         max_sm_occupancy,
         k,
-        block_task_back_policy_t::BlockItemsK,
+        block_task_policy_t::BlockItemsK,
         config.block,
         config.grid);     // in,out
 
@@ -380,8 +379,8 @@ launch_configuration_back dispatch_back(
     {
         // Compute tiling efficiency
         // tiling efficiency??
-        float block_tiling_efficiency = float(block_task_back_policy_t::BlockItemsY * block_task_back_policy_t::BlockItemsX) /
-            float(block_task_back_policy_t::BlockItemsY + block_task_back_policy_t::BlockItemsX);
+        float block_tiling_efficiency = float(block_task_policy_t::BlockItemsY * block_task_policy_t::BlockItemsX) /
+            float(block_task_policy_t::BlockItemsY + block_task_policy_t::BlockItemsX);
 
         float tiling_efficiency = block_tiling_efficiency;
 
@@ -471,18 +470,18 @@ launch_configuration_back device_gemm_back(
 {
     // Parameterize an task policy type
     // (TODO: use a policy dispatch mechanism based upon SM version)
-    typedef gemm_policy<value_t, accum_t, TransformA, TransformB, TilingStrategy> block_task_back_policy_t;
+    typedef gemm_policy<value_t, accum_t, TransformA, TransformB, TilingStrategy> block_task_policy_t;
 
     // AllowRaggedTiles-tile check
-    if ((m % block_task_back_policy_t::BlockItemsY != 0) ||
-        (n % block_task_back_policy_t::BlockItemsX != 0) ||
-        (k % block_task_back_policy_t::BlockItemsK != 0))
+    if ((m % block_task_policy_t::BlockItemsY != 0) ||
+        (n % block_task_policy_t::BlockItemsX != 0) ||
+        (k % block_task_policy_t::BlockItemsK != 0))
     {
         // Needs ragged tile-handling
         static const bool AllowRaggedTiles = true;
 
-        return dispatch_back<math_op, block_task_back_policy_t, TransformA, LdgAlignA, TransformB, LdgAlignB, value_t, accum_t, epilogue_op_t, LdgAlignC, AllowRaggedTiles>(
-            kernel<math_op,block_task_back_policy_t, TransformA, LdgAlignA, TransformB, LdgAlignB, value_t, accum_t, epilogue_op_t, LdgAlignC, AllowRaggedTiles>,
+        return dispatch_back<math_op, block_task_policy_t, TransformA, LdgAlignA, TransformB, LdgAlignB, value_t, accum_t, epilogue_op_t, LdgAlignC, AllowRaggedTiles>(
+            kernel<math_op,block_task_policy_t, TransformA, LdgAlignA, TransformB, LdgAlignB, value_t, accum_t, epilogue_op_t, LdgAlignC, AllowRaggedTiles>,
             m,
             n,
             k,
@@ -500,8 +499,8 @@ launch_configuration_back device_gemm_back(
         // Does not need ragged tile-handling
         static const bool AllowRaggedTiles = false;
 
-        return dispatch_back<math_op, block_task_back_policy_t, TransformA, LdgAlignA, TransformB, LdgAlignB, value_t, accum_t, epilogue_op_t, LdgAlignC, AllowRaggedTiles>(
-            kernel<math_op,block_task_back_policy_t, TransformA, LdgAlignA, TransformB, LdgAlignB, value_t, accum_t, epilogue_op_t, LdgAlignC, AllowRaggedTiles>,
+        return dispatch_back<math_op, block_task_policy_t, TransformA, LdgAlignA, TransformB, LdgAlignB, value_t, accum_t, epilogue_op_t, LdgAlignC, AllowRaggedTiles>(
+            kernel<math_op,block_task_policy_t, TransformA, LdgAlignA, TransformB, LdgAlignB, value_t, accum_t, epilogue_op_t, LdgAlignC, AllowRaggedTiles>,
             m,
             n,
             k,

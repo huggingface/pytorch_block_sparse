@@ -405,7 +405,6 @@ struct block_task_back
     //-------------------------------------------------------------------------
     // Constructor API
     //-------------------------------------------------------------------------
-
     /// Constructor
     inline __device__
     block_task_back(
@@ -413,8 +412,8 @@ struct block_task_back
         value_t *d_a,
         value_t *d_b,
         accum_t *d_c,
-        int     *d_c_ptr,
-        int     *d_c_indices,
+        int2    *d_c_blocks,
+        long    d_c_blocks_length,
         epilogue_op_t epilogue_op,
         int dim_m,
         int dim_n,
@@ -434,8 +433,7 @@ struct block_task_back
         warp_thread_coords(thread_coords()),
         thread_strip_offset_a((warp_thread_coords.y * LdsVectorDpVectorsA) + (block_warp_coords.y * WarpItemsY)),
         thread_strip_offset_b((warp_thread_coords.x * LdsVectorDpVectorsB) + (block_warp_coords.x * WarpItemsX)),
-        // TODO
-        grid_raster_sparse(NULL, 100),
+        grid_raster_sparse(d_c_blocks, d_c_blocks_length),
         //BlockIdX(grid_raster_sparse.block_item_coords_src.x / BlockItemsX),
         // BlockTiles(d_ptr[grid_raster.block_item_coords.x / BlockItemsX + 1] - d_ptr[grid_raster.block_item_coords.x / BlockItemsX]),
         tile_order(0),
@@ -449,9 +447,6 @@ struct block_task_back
                 grid_raster_sparse.block_item_coords_src.y,
                 block_item_coords_k),
             block_end_item_k),                                              // block_end_item_k
-
-//            d_c_ptr,                                                          // d_ptr
-//            d_c_indices,                                                      // d_indices,
 
         loader_b(
             d_b,                                                            // d_matrix
@@ -531,13 +526,13 @@ struct block_task_back
             #pragma unroll
             for (int y = 0; y < ThreadItemsY; y += LdsVectorDpVectorsA)
             {
-                int thread_strip_b = x / LdsVectorDpVectorsB;
-                int thread_strip_a = y / LdsVectorDpVectorsA;
-
-                int thread_item_coords_tile_x = thread_strip_offset_b + (thread_strip_b * WarpThreadsX * LdsVectorDpVectorsB) + (x % LdsVectorDpVectorsB);
-                int thread_item_coords_tile_y = thread_strip_offset_a + (thread_strip_a * WarpThreadsY * LdsVectorDpVectorsA) + (y % LdsVectorDpVectorsA);
 
                 // TODO
+                // int thread_strip_b = x / LdsVectorDpVectorsB;
+                // int thread_strip_a = y / LdsVectorDpVectorsA;
+                //int thread_item_coords_tile_x = thread_strip_offset_b + (thread_strip_b * WarpThreadsX * LdsVectorDpVectorsB) + (x % LdsVectorDpVectorsB);
+                //int thread_item_coords_tile_y = thread_strip_offset_a + (thread_strip_a * WarpThreadsY * LdsVectorDpVectorsA) + (y % LdsVectorDpVectorsA);
+
                 int c_idx = 0; //(grid_raster.block_item_coords.x + thread_item_coords_tile_x) * dim_m +
                     //grid_raster.block_item_coords.y + thread_item_coords_tile_y;
 

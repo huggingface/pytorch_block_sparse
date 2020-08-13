@@ -122,8 +122,8 @@ struct cutlass_gemm_dispatch_back
         value_t                                 *A,
         value_t                                 *B,
         accum_t                                 *C,
-        int                                     *C_ptr,
-        int                                     *C_indices,
+        int2                                    *C_blocks,
+        long                                    C_blocks_length,
         cudaStream_t                            stream = 0,
         bool                                    debug_synchronous = false)
     {
@@ -148,8 +148,8 @@ struct cutlass_gemm_dispatch_back
                 A,
                 B,
                 C,
-                C_ptr,
-                C_indices,
+                C_blocks,
+                C_blocks_length,
                 stream,
                 debug_synchronous);
     }
@@ -163,8 +163,8 @@ struct cutlass_gemm_dispatch_back
         value_t         *A,                         ///< A matrix
         value_t         *B,                         ///< B matrix
         accum_t         *C,                         ///< C matrix
-        int             *C_ptr,                     ///< ptr of pruned C matrix
-        int             *C_indices,                 ///< indices of pruned C matrix
+        int2            *C_blocks,                     ///< ptr of pruned C matrix
+        long            C_blocks_length,                 ///< indices of pruned C matrix
         accum_t         alpha,                      ///< Scalar used for multiplicands
         accum_t         beta,                       ///< Scalar used for addend
         cudaStream_t    stream = 0,                 ///< CUDA stream to launch kernels within.
@@ -202,8 +202,8 @@ struct cutlass_gemm_dispatch_back
                         A,
                         B,
                         C,
-                        C_ptr,
-                        C_indices,
+                        C_blocks,
+                        C_blocks_length,
                         stream,
                         debug_synchronous);
             #endif
@@ -221,8 +221,8 @@ struct cutlass_gemm_dispatch_back
                         A,
                         B,
                         C,
-                        C_ptr,
-                        C_indices,
+                        C_blocks,
+                        C_blocks_length,
                         stream,
                         debug_synchronous);
             #endif
@@ -240,8 +240,8 @@ struct cutlass_gemm_dispatch_back
                         A,
                         B,
                         C,
-                        C_ptr,
-                        C_indices,
+                        C_blocks,
+                        C_blocks_length,
                         stream,
                         debug_synchronous);
             #endif

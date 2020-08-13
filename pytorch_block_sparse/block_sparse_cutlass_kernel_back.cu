@@ -53,8 +53,8 @@ bool test_bsc_back(
     value_t* A_data,
     value_t* B_data,
     accum_t* C_data,
-    int* C_bsc_ptr,
-    int* C_bsc_indices,
+    int2* C_blocks,
+    long C_blocks_length,
     int m,          ///< Height of C in rows
     int n,          ///< Width of C in columns
     int k,          ///< Width (height) of A (B)
@@ -80,8 +80,8 @@ bool test_bsc_back(
         A_data,
         B_data,
         C_data,
-        C_bsc_ptr,
-        C_bsc_indices,
+        C_blocks,
+        C_blocks_length,
         alpha,
         beta,
         stream,
@@ -98,8 +98,8 @@ torch::Tensor  blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
 											  int block_size_rows_b,
 											  int block_size_cols_b,
 											  torch::Tensor sparse_c,
-											  torch::Tensor sparse_c_row_start_ends_a,
-											  torch::Tensor sparse_c_cols_a_0
+											  torch::Tensor sparse_c_blocks,
+											  long sparse_c_blocks_length
 											  )
 {
     typedef float       value_t;
@@ -111,9 +111,8 @@ torch::Tensor  blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
     value_t* A_data = (value_t*)dense_a.data_ptr();
     value_t* B_data = (value_t*)dense_b.data_ptr();
     value_t* C_data = (value_t*)sparse_c.data_ptr();
-    int* C_bsc_ptr = (int*)sparse_c_row_start_ends_a.data_ptr();
-    int* C_bsc_indices = (int*)sparse_c_cols_a_0.data_ptr();
-
+    int2* C_blocks = (int2*)sparse_c_blocks.data_ptr();
+    long C_blocks_length = sparse_c_blocks_length;
 
     //int m = sizes_a[0];
 
@@ -136,7 +135,7 @@ torch::Tensor  blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
 	TransformA,
 	TransformB,
 	value_t,
-	accum_t>(A_data,B_data, C_data, C_bsc_ptr, C_bsc_indices, m, n, k, accum_t(alpha), accum_t(beta));
+	accum_t>(A_data,B_data, C_data, C_blocks, C_blocks_length, m, n, k, accum_t(alpha), accum_t(beta));
 
     return sparse_c;
 }

@@ -27,6 +27,7 @@ torch::Tensor blocksparse_matmul_cutlass(torch::Tensor dense_a,
 												   int block_size_cols_b,
 												   torch::Tensor dense_out);
 
+
 torch::Tensor  blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
 											  torch::Tensor dense_b,
 											  int m,
@@ -35,8 +36,8 @@ torch::Tensor  blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
 											  int block_size_rows_b,
 											  int block_size_cols_b,
 											  torch::Tensor sparse_c,
-											  torch::Tensor sparse_c_row_start_ends_a,
-											  torch::Tensor sparse_c_cols_a_0
+											  torch::Tensor sparse_c_blocks,
+											  long sparse_c_blocks_length
 											  );
 
 
@@ -84,11 +85,11 @@ torch::Tensor  blocksparse_matmul_back_cutlass_(torch::Tensor dense_a,
 											  int block_size_rows_b,
 											  int block_size_cols_b,
 											  torch::Tensor sparse_c,
-											  torch::Tensor sparse_c_row_start_ends_a,
-											  torch::Tensor sparse_c_cols_a_0
+											  torch::Tensor sparse_c_blocks,
+											  long sparse_c_blocks_length
 											  )
 {
-   return blocksparse_matmul_back_cutlass(dense_a, dense_b, m, n, k, block_size_rows_b, block_size_cols_b, sparse_c, sparse_c_row_start_ends_a, sparse_c_cols_a_0);
+   return blocksparse_matmul_back_cutlass(dense_a, dense_b, m, n, k, block_size_rows_b, block_size_cols_b, sparse_c, sparse_c_blocks, sparse_c_blocks_length);
 }
 
 

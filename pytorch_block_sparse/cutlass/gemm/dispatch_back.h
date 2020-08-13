@@ -67,8 +67,8 @@ struct param_pack_back
     value_t *d_a;               ///< Pointer to matrix A array values
     value_t *d_b;               ///< Pointer to matrix B array values
     accum_t *d_c;               ///< Pointer to matrix C array values
-    int     *d_c_ptr;             ///< Pointer to ptr of pruned C matrix
-    int     *d_c_indices;         ///< Pointer to indices of pruned C matrix
+    int2    *d_c_pos;           ///< Pointer to positions of blocks in c
+    long     d_c_pos_length;    ///< Device length of positions of blocks in c
     epilogue_op_t epilogue_op;
 
     param_pack_back(
@@ -79,10 +79,10 @@ struct param_pack_back
         epilogue_op_t op,           ///< Epilogue operation to update matrix C
         value_t *d_a,               ///< Pointer to matrix A array values
         value_t *d_b,               ///< Pointer to matrix B array values
-        accum_t *d_c,
-        int     *d_c_ptr,             ///< Pointer to ptr of pruned B matrix
-        int     *d_c_indices         ///< Pointer to indices of pruned B matrix
-        )               ///< Pointer to matrix C array values
+        accum_t *d_c,               ///< Pointer to sparse matrix C array values
+        int2    *d_c_pos,           ///< Pointer to positions of blocks in c
+        long     d_c_pos_length     ///< Device length of positions of blocks in c
+        )
     :
         m(m),
         n(n),
@@ -92,8 +92,8 @@ struct param_pack_back
         d_a(d_a),
         d_b(d_b),
         d_c(d_c),
-        d_c_ptr(d_c_ptr),
-        d_c_indices(d_c_indices)
+        d_c_pos(d_c_pos),
+        d_c_pos_length(d_c_pos_length)
     {}
 
 };
@@ -208,8 +208,8 @@ __global__ void kernel(param_pack_back<value_t, accum_t, epilogue_op_t> pack)
         pack.d_a,
         pack.d_b,
         pack.d_c,
-        pack.d_c_ptr,
-        pack.d_c_indices,
+        pack.d_c_pos,
+        pack.d_c_pos_length,
         pack.epilogue_op,
         pack.m,
         pack.n,
@@ -290,7 +290,7 @@ struct launch_configuration_back
  * This function also serves as the autotuning entrypoint to evaluate different
  * tuning parameterizations of kernel.
  */
-template <
+ template <
     math_operation_class_t      math_op,            ///< Indicates which class of math operation to select
     typename                    block_task_back_policy_t,  ///< Parameterization of block_task_back_policy_t
     matrix_transform_t::kind_t  TransformA,         ///< Transformation op for matrix A
@@ -311,9 +311,9 @@ launch_configuration_back dispatch_back(
     epilogue_op_t   epilogue_op,                    ///< Epilogue operation to update matrix C
     value_t         *d_a,                           ///< Device pointer to matrix A array values
     value_t         *d_b,                           ///< Device pointer to matrix B array values
-    accum_t         *d_c,                           ///< Device pointer to matrix C array values
-    int             *d_c_ptr,                       ///< Device pointer to ptr of pruned C matrix
-    int             *d_c_indices,                   ///< Device pointer to indices of pruned C matrix
+    accum_t         *d_c,                           ///< Device pointer to sparse matrix C array values
+    int2            *d_c_pos,                       ///< Device pointer to positions of blocks in c
+    long            d_c_pos_length,                 ///< Device length of positions of blocks in c
     cudaStream_t    stream = 0,                     ///< CUDA stream to launch kernels within.  Default is stream<sub>0</sub>.
     bool            debug_synchronous = true)       ///< Whether or not to synchronize the stream after every kernel launch
                                                     ///  to check for errors.  Also causes launch configurations to be printed
@@ -348,8 +348,7 @@ launch_configuration_back dispatch_back(
     }
 
     // Compute grid extents
-    // TODO : replace 0
-    config.grid = grid_raster_sparse_t::grid_dims(0);
+    config.grid = grid_raster_sparse_t::grid_dims(d_c_pos_length);
     // printf("grid (x, y, z) = (%d, %d, %d) \n", config.grid.x, config.grid.y, config.grid.z);
 
     // Get SM count
@@ -410,8 +409,8 @@ launch_configuration_back dispatch_back(
         d_a,
         d_b,
         d_c,
-        d_c_ptr,
-        d_c_indices
+        d_c_pos,
+        d_c_pos_length
         );
 
     // Prepare k-split coordinator
@@ -462,8 +461,8 @@ launch_configuration_back device_gemm_back(
     value_t         *d_a,                       ///< Device pointer to matrix A array values
     value_t         *d_b,                       ///< Device pointer to matrix B array values
     accum_t         *d_c,                       ///< Device pointer to matrix C array values
-    int             *d_c_ptr,                   ///< Device pointer to ptr of pruned C matrix
-    int             *d_c_indices,               ///< Device pointer to indices of pruned C matrix
+    int2            *d_c_pos,                   ///< Device pointer to positions of blocks in c
+    long             d_c_pos_length,            ///< Device length of positions of blocks in c
     cudaStream_t    stream = 0,                 ///< CUDA stream to launch kernels within.  Default is stream<sub>0</sub>.
     bool            debug_synchronous = false)  ///< Whether or not to synchronize the stream after every kernel launch to
                                                 ///  check for errors.  Also causes launch configurations to be printed to
@@ -490,8 +489,8 @@ launch_configuration_back device_gemm_back(
             d_a,
             d_b,
             d_c,
-            d_c_ptr,
-            d_c_indices,
+            d_c_pos,
+            d_c_pos_length,
             stream,
             debug_synchronous);
     }
@@ -509,8 +508,8 @@ launch_configuration_back device_gemm_back(
             d_a,
             d_b,
             d_c,
-            d_c_ptr,
-            d_c_indices,
+            d_c_pos,
+            d_c_pos_length,
             stream,
             debug_synchronous);
     }

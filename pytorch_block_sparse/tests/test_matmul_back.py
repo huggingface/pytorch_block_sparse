@@ -59,7 +59,7 @@ class TestFun(TestCase):
 
 #                print(c_dense.shape, c0_.shape)
 
-                s = c_dense.isclose(c0_, atol=1e-03).all()
+                s = c_dense.isclose(c0_, atol=1e-02).all()
 
                 if not s.item():
                     print("Comparison NOK : transposed_matmul issue for ", k)
@@ -117,18 +117,17 @@ class TestFun(TestCase):
 
             b_pytorch = pytorch_result[b[0]:b[0] + block_size[0], b[1]:b[1] + block_size[1]]
 
-            b_cutlass = cutlass_result.data[i*32:i*32 + 32].t()
+            b_cutlass = cutlass_result.data[i*32:i*32 + 32]
             #print("cutlass full block\n", b_cutlass)
             #print("pytorch extracted block\n", b_pytorch)
 
-            compare = ((b_pytorch - b_cutlass).abs() < 0.1)
+            compare = b_pytorch.isclose(b_cutlass, atol=0.1)
             torch.set_printoptions(profile="full")
-            #print(compare.long())
             torch.set_printoptions(profile="default")
             #break
             if not compare.all().item():
-                print("error on : i = %d" % i)
-                #raise Exception("Comparison failed", "i =", i)
+                #print("error on : i = %d" % i)
+                raise Exception("Comparison failed")
 
 
     def tst0(self):

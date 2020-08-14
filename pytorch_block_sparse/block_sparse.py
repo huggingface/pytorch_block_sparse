@@ -205,7 +205,7 @@ class BlockSparseMatrix:
 
         return
 
-    def transposed_matmul(self, dense_a):
+    def matmul_cuda(self, dense_a):
         """Compute a.matmul(self.t()) """
         import block_sparse_native
         shape_a = dense_a.shape
@@ -309,5 +309,11 @@ class BlockSparseMatrix:
                                                             self.block_shape[0], self.block_shape[1],
                                                             data,
                                                             self.blocks, blocks_len)
+
+        data_shape = data.shape
+        data = data.view(data_shape[0] // self.block_shape[0], self.block_shape[0], self.block_shape[1]).transpose(1,2)
+
+        self.data = data.reshape(data_shape)
+
         return self
 

@@ -46,6 +46,7 @@ class BlockSparseMatrix:
 
     def build_indices_(self, nnz,  transpose_indices):
         nnz = nnz.transpose(0,1)
+
         X, Y = self.blocks_count_(self.shape, self.block_shape)
 
         rows = nnz[0]
@@ -76,11 +77,17 @@ class BlockSparseMatrix:
 
     def build_indices(self):
         nnz = self.block_mask.nonzero()
+        self.blocks = nnz.flip(-1).flatten().to(dtype=torch.int32)
         self.cols_a, self.row_start_ends_a = self.build_indices_(nnz, False)
         self.rows_b, self.col_start_ends_b  = self.build_indices_(nnz, True)
 
     @classmethod
-    def zero(cls, shape, n_blocks, block_shape=(32, 32), device = None):
+    def zero(cls, shape, n_blocks = None, blocks = None, block_shape=(32, 32), device = None):
+        if n_blocks == None:
+            assert(blocks != None)
+            n_blocks = len(blocks)
+        else:
+            assert(blocks == None)
         if len(shape) != 2 or shape[0] % block_shape[0] != 0 or shape[1] % block_shape[1] != 0:
             raise Exception("shape should be a tuple of 2 multiples of block_shape")
 
@@ -88,20 +95,22 @@ class BlockSparseMatrix:
 
         if n_blocks > X * Y:
             raise Exception("Too many blocks : %d > %d * %d = %d" % (n_blocks, X, Y, X * Y))
-        positions = numpy.random.choice(X*Y, size=n_blocks, replace=False)
+        if blocks != None:
+            positions = numpy.array(list(map(lambda b : b[0] * Y + b[1], blocks)))
+        else:
+            positions = numpy.random.choice(X*Y, size=n_blocks, replace=False)
         positions = torch.tensor(positions, dtype=torch.int64, device = device).sort()[0]
 
         block_mask = torch.zeros(X * Y, dtype=torch.bool, device = device)
         block_mask[positions] = True
         block_mask = block_mask.view(X, Y)
-
-        data = torch.randn((n_blocks * block_shape[0], block_shape[1]), dtype=torch.float, device = device) # randn
+        data = torch.zeros((n_blocks * block_shape[0], block_shape[1]), dtype=torch.float, device = device)
 
         return cls(shape, block_mask, data, block_shape)
 
     @classmethod
-    def randn(cls, shape, n_blocks, block_shape=(32, 32), device = None):
-        ret = cls.zero(shape, n_blocks, block_shape, device)
+    def randn(cls, shape, n_blocks, blocks = None, block_shape=(32, 32), device = None):
+        ret = cls.zero(shape, n_blocks, blocks, block_shape, device)
         torch.randn(ret.data.shape, out=ret.data)
         return ret
 
@@ -308,12 +317,13 @@ class BlockSparseMatrix:
         #data = torch.zeros(shape_b[1], shape_a[0], device = dense_a.device, dtype = dense_a.dtype)
         data = self.data
 
+        blocks_len = len(self.blocks) // 2
+
         out2 = block_sparse_native.blocksparse_matmul_back_cutlass(dense_a, dense_b,
                                                                    shape_a[0], shape_b[1], shape_a[1],
                                                                    self.block_shape[0], self.block_shape[1],
                                                                    data,
-                                                                   self.row_start_ends_a, self.cols_a,
+                                                                   self.blocks, blocks_len,
                                                                    )
-        #self.data = self.data.t().reshape(self.data.shape)
-        self.data = data.view(shape_b[1], shape_a[0])
         return self
+

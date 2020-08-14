@@ -12,7 +12,7 @@ class TestFun(TestCase):
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
             block_count = int(total_block_count * density)
 
-        bsm = BlockSparseMatrix.randn((sizes[2], sizes[1]), block_count, block_size, device=device)
+        bsm = BlockSparseMatrix.randn((sizes[2], sizes[1]), block_count, block_shape=block_size, device=device)
         dbsm = bsm.to_dense()
         bsm.check_with_dense(dbsm)
 
@@ -77,6 +77,7 @@ class TestFun(TestCase):
         size = 512
         sizes = [size * 16 * 8, size * 2, size * 4]
         density = 0.42
+        density = 1.0
 
         flops = float(2 * sizes[0] * sizes[1] * sizes[2])
 

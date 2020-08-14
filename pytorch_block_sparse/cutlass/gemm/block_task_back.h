@@ -526,15 +526,13 @@ struct block_task_back
             #pragma unroll
             for (int y = 0; y < ThreadItemsY; y += LdsVectorDpVectorsA)
             {
+                int thread_strip_b = x / LdsVectorDpVectorsB;
+                int thread_strip_a = y / LdsVectorDpVectorsA;
+                int thread_item_coords_tile_x = thread_strip_offset_b + (thread_strip_b * WarpThreadsX * LdsVectorDpVectorsB) + (x % LdsVectorDpVectorsB);
+                int thread_item_coords_tile_y = thread_strip_offset_a + (thread_strip_a * WarpThreadsY * LdsVectorDpVectorsA) + (y % LdsVectorDpVectorsA);
 
-                // TODO
-                // int thread_strip_b = x / LdsVectorDpVectorsB;
-                // int thread_strip_a = y / LdsVectorDpVectorsA;
-                //int thread_item_coords_tile_x = thread_strip_offset_b + (thread_strip_b * WarpThreadsX * LdsVectorDpVectorsB) + (x % LdsVectorDpVectorsB);
-                //int thread_item_coords_tile_y = thread_strip_offset_a + (thread_strip_a * WarpThreadsY * LdsVectorDpVectorsA) + (y % LdsVectorDpVectorsA);
-
-                int c_idx = 0; //(grid_raster.block_item_coords.x + thread_item_coords_tile_x) * dim_m +
-                    //grid_raster.block_item_coords.y + thread_item_coords_tile_y;
+                int c_idx = (grid_raster_sparse.block_item_coords_dst.x + thread_item_coords_tile_x) * BlockItemsY +
+                    grid_raster_sparse.block_item_coords_dst.y + thread_item_coords_tile_y;
 
                 accum_t *my_c = d_c + c_idx;
 

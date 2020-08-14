@@ -6,118 +6,86 @@ from torch.autograd import gradcheck
 
 
 class TestFun(TestCase):
-    def helper(self, sizes, block_size, block_count = None, density = None, iterations = 1):
+    def helper_(self, sizes, block_size, block_count = None, blocks = None, density = None, iterations = 1):
         device = "cuda"
         a = torch.randn((sizes[0], sizes[1]), device=device)
         b = torch.randn((sizes[0], sizes[2]), device=device)
 
-        if block_count == None:
+        if block_count == None and blocks == None:
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
             block_count = int(total_block_count * density)
 
-        bsm = BlockSparseMatrix.zero((sizes[2], sizes[1]), block_count, block_size, device=device)
+        bsm = BlockSparseMatrix.zero((sizes[2], sizes[1]), block_count, blocks, block_size, device=device)
         dbsm = bsm.to_dense()
         bsm.check_with_dense(dbsm)
 
-        timings = {}
+        results = {}
 
         for kind in ["pytorch", "cutlass"]:
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
 
             start.record()
-            result = None
             for i in range(iterations):
                 if kind == "pytorch":
                     c = b.t().mm(a)
-                    result = c
                 elif kind == "cutlass":
                     c = bsm.matmul_support(b.t().contiguous(), a)
-#                    dbsm2 = bsm.to_dense()
-
-                    print("c.data.shape", c.data.shape)
-                    result = c.data.t()
-                    #for r in c.data:
-                    #    print(r)
-                    #c = c.to_dense()
-#                    print("C data", c.data)
-
-            print("C ", kind, result)
 
             end.record()
             torch.cuda.synchronize()
             elapsed = start.elapsed_time(end)
 
-            timing = dict(kind = kind, elapsed = elapsed, result=c)
-            timing["result"] = result
-            timings[kind] = timing
+            result = dict(kind = kind, elapsed = elapsed, output=c)
+            results[kind] = result
 
-        if "pytorch" in timings:
-            c0 = timings["pytorch"]["result"]
-            for k, t in timings.items():
+        if "pytorch" in results:
+            c0 = results["pytorch"]["output"]
+
+
+            for k, t in results.items():
                 if k == "pytorch":
                     t["comparison"] = True
                     continue
-                c = t["result"]
-                continue
+                c = t["output"]
 
-                s = c.isclose(c0, atol=1e-03).all()
+                c_dense = c.to_dense()
+#                print(c_dense)
+
+                c0_ = c0 * (c_dense != 0)
+
+#                print(c_dense.shape, c0_.shape)
+
+                s = c_dense.isclose(c0_, atol=1e-03).all()
+
                 if not s.item():
                     print("Comparison NOK : transposed_matmul issue for ", k)
-                    print("max difference %s=" % t["kind"], (c - c0).abs().max())
+                    print("max difference %s=" % t["kind"], (c_dense - c0_).abs().max())
                     t["comparison"] = False
                 else:
                     print("Comparison OK for transposed_matmul for ", k)
-                    print("max difference %s=" % t["kind"], (c - c0).abs().max())
+                    print("max difference %s=" % t["kind"], (c_dense - c0_).abs().max())
                     t["comparison"] = True
 
-        r = (timings["pytorch"]["result"] - timings["cutlass"]["result"]).abs() < 0.0001
-        torch.set_printoptions(profile="full")
-        print("matching")
-        #print(r.long())
-        print(r.all())
-        torch.set_printoptions(profile="default")
+        return results
 
-        print("output shape", timings["pytorch"]["result"].shape)
-
-        return timings
-
-
-    def tst0(self):
-        sizes = [64, 16, 32]
-        block_size = (16,16)
-        block_count = 2
-        for i in range(2):
-            time_sparse, time_dense = self.helper(sizes, block_size, block_count)
-            if i != 0:
-                print("time_sparse=%f, time_dense = %s" % (time_sparse, time_dense))
-
-    def test1(self):
-        size = 32
-        sizes = [size * 2, size * 4, size * 8]
-        print("size", sizes)
-        density = 1.0
-
+    def helper(self, sizes, block_size, density, iterations, inner_iterations, block_count = None, blocks = None):
         flops = float(2 * sizes[0] * sizes[1] * sizes[2])
 
-        block_size = (32, 32)
-        iterations = 1
-        inner_iterations = 1
-
-        results = {}
+        report = {}
         for i in range(iterations):
-            timings = self.helper(sizes, block_size, density = density, iterations = inner_iterations)
+            results = self.helper_(sizes, block_size, block_count=block_count, blocks=blocks, density=density, iterations=inner_iterations)
 
-            if "pytorch" in timings:
-                pytorch_time = timings["pytorch"]["elapsed"]
+            if "pytorch" in results:
+                pytorch_time = results["pytorch"]["elapsed"]
             else:
                 pytorch_time = None
 
-            for kind, d in timings.items():
-                if kind not in results:
-                    results[kind] = {True:0, False:0}
+            for kind, d in results.items():
+                if kind not in report:
+                    report[kind] = {True: 0, False: 0}
                 if "comparison" in d:
-                    results[kind][d["comparison"]] += 1
+                    report[kind][d["comparison"]] += 1
 
                 kind = d["kind"]
                 kind_elapsed = d["elapsed"]
@@ -126,8 +94,65 @@ class TestFun(TestCase):
                 else:
                     ratio = kind_elapsed / pytorch_time
 
-                print("kind = %s, elapsed=%f, gflops = %f, ratio = %s" % (kind, kind_elapsed, flops * inner_iterations / kind_elapsed / 1e6, ratio))
-        print(results)
+                print("kind = %s, elapsed=%f, gflops = %f, ratio = %s" % (
+                kind, kind_elapsed, flops * inner_iterations / kind_elapsed / 1e6, ratio))
+
+        return results
+
+    def check(self, results, block_size):
+        cutlass_result = results["cutlass"]["output"]
+        pytorch_result = results["pytorch"]["output"]
+
+        print(cutlass_result)
+
+        #print("cutlass block[0][0]", cutlass_result.data[::32, ::32])
+        #print("pytorch blocks[0][0]", pytorch_result[::32, ::32])
+
+        for i in range(cutlass_result.blocks.shape[0] // 2):
+            #print("i=", i)
+            b = cutlass_result.blocks[i:i+2].flip(0) * torch.tensor(block_size, device=cutlass_result.blocks.device)
+            #print("block position", b)
+
+            b_pytorch = pytorch_result[b[0]:b[0] + block_size[0], b[1]:b[1] + block_size[1]]
+
+            b_cutlass = cutlass_result.data[i*32:i*32 + 32].t()
+            #print("cutlass full block\n", b_cutlass)
+            #print("pytorch extracted block\n", b_pytorch)
+
+            compare = ((b_pytorch - b_pytorch).abs() < 0.0001)
+            #torch.set_printoptions(profile="full")
+            #print(compare.long())
+            #torch.set_printoptions(profile="default")
+            if not compare.all().item():
+                raise Exception("Comparison failed")
+
+
+    def test0(self):
+        size = 32
+        sizes = [size * 2, size * 4, size * 8]
+        block_size = (32, 32)
+
+        block_tests = [[(0, 0)],[(0,1)], [(1,0)], [(1,0), (0,2)]]
+        block_tests = [[(1,0), (2,0), (3,0)]]
+        for blocks in block_tests:
+            results = self.helper(sizes, block_size, density = None, blocks = blocks, iterations = 1, inner_iterations = 1)
+            self.check(results, block_size)
+
+    def test1(self):
+        size = 512
+        sizes = [size * 16 * 8, size * 2, size * 4]
+
+        density = 1.0
+
+        block_size = (32, 32)
+        iterations = 1
+        inner_iterations = 1
+
+        results = self.helper(sizes, block_size, density, iterations, inner_iterations, block_count = None)
+
+        self.check(results, block_size)
+
+
 
 if __name__ == '__main__':
     unittest.main()

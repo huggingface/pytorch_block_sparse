@@ -9,7 +9,8 @@ class TestFun(TestCase):
     def helper_(self, sizes, block_size, block_count = None, blocks = None, density = None, iterations = 1):
         device = "cuda"
         a = torch.randn((sizes[0], sizes[1]), device=device)
-        b = torch.randn((sizes[0], sizes[2]), device=device)
+        b0 = torch.randn((sizes[0], sizes[2]), device=device)
+        b1 = b0.t().contiguous()
 
         if block_count == None and blocks == None:
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
@@ -28,9 +29,9 @@ class TestFun(TestCase):
             start.record()
             for i in range(iterations):
                 if kind == "pytorch":
-                    c = b.t().mm(a)
+                    c = b0.t().mm(a)
                 elif kind == "cutlass":
-                    c = bsm.matmul_support(b.t().contiguous(), a)
+                    c = bsm.matmul_support(b1, a)
 
             end.record()
             torch.cuda.synchronize()
@@ -127,7 +128,7 @@ class TestFun(TestCase):
                 raise Exception("Comparison failed")
 
 
-    def test0(self):
+    def tst0(self):
         size = 32
         sizes = [size * 2, size * 4, size * 8]
         block_size = (32, 32)
@@ -145,8 +146,8 @@ class TestFun(TestCase):
         density = 1.0
 
         block_size = (32, 32)
-        iterations = 1
-        inner_iterations = 1
+        iterations = 10
+        inner_iterations = 10
 
         results = self.helper(sizes, block_size, density, iterations, inner_iterations, block_count = None)
 

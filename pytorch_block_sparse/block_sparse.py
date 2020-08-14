@@ -283,11 +283,6 @@ class BlockSparseMatrix:
         shape_b = dense_b.shape
         shape_c = self.shape
 
-        if False:
-            print("dense_a shape", shape_a)
-            print("dense_b shape", shape_b)
-            print("sparse_c shape", shape_c)
-
         def print_sub_matrice(m):
             for i in range(0, m.shape[0], 32):
                 for offset_x in range(32):
@@ -301,29 +296,18 @@ class BlockSparseMatrix:
             print()
             print()
 
-
-
-        #print("dense_a")
-        #print_sub_matrice(dense_a)
-        #print("dense_b")
-        #print_sub_matrice(dense_b)
-
         assert(shape_a[1] == shape_b[0])
         assert(shape_c[0] == shape_a[0])
         assert(shape_c[1] == shape_b[1])
 
-        #print("dense_b stride", dense_b.stride())
-
-        #data = torch.zeros(shape_b[1], shape_a[0], device = dense_a.device, dtype = dense_a.dtype)
         data = self.data
 
         blocks_len = len(self.blocks) // 2
 
-        out2 = block_sparse_native.blocksparse_matmul_back_cutlass(dense_a, dense_b,
-                                                                   shape_a[0], shape_b[1], shape_a[1],
-                                                                   self.block_shape[0], self.block_shape[1],
-                                                                   data,
-                                                                   self.blocks, blocks_len,
-                                                                   )
+        block_sparse_native.blocksparse_matmul_back_cutlass(dense_a, dense_b,
+                                                            shape_a[0], shape_b[1], shape_a[1],
+                                                            self.block_shape[0], self.block_shape[1],
+                                                            data,
+                                                            self.blocks, blocks_len)
         return self
 

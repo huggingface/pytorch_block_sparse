@@ -27,7 +27,7 @@ class TestFun(TestCase):
                 if kind == "pytorch":
                     c = dbsm.matmul(a.view(a.shape[1], a.shape[0]))
                 elif kind == "cutlass":
-                    c = bsm.matmul(a)
+                    c = bsm.matmul(a, out = out)
                 elif kind == "cublas":
                     import block_sparse_native
                     prr = torch.zeros((sizes[2], sizes[0]), device="cuda")

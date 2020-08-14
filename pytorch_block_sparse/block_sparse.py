@@ -231,7 +231,7 @@ class BlockSparseMatrix:
 
         return out2
 
-    def matmul(self, dense_a, method = 0):
+    def matmul(self, dense_a):
         """Compute a.matmul(self.t()) """
         import block_sparse_native
         shape_a = dense_a.shape
@@ -240,7 +240,7 @@ class BlockSparseMatrix:
         if shape_a[1] != shape_b[0]:
             raise Exception("Invalid matrices sizes (%d, %d) x (%d, %d)" % (shape_a[0], shape_a[1], shape_b[0], shape_b[1]))
 
-        out = torch.zeros((shape_b[1], shape_a[0]), device = dense_a.device).contiguous()
+        out = torch.zeros((shape_b[1], shape_a[0]), device = dense_a.device)
         #print("stride", out.stride())
 
         assert(dense_a.is_contiguous())

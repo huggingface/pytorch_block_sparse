@@ -33,7 +33,8 @@ class TestFun(TestCase):
                 if kind == "pytorch":
                     c = b0.t().mm(a)
                 elif kind == "cutlass":
-                    c = bsm.matmul_support(b1, a)
+                    c = bsm.matmul_with_output_sparse_support(b1, a)
+
 
             end.record()
             torch.cuda.synchronize()

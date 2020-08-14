@@ -25,16 +25,17 @@ class TestFun(TestCase):
 
             for i in range(iterations):
                 if kind == "pytorch":
-                    c = dbsm.matmul(a.view(a.shape[1], a.shape[0]))
+                    c = a.matmul(dbsm.t())
                 elif kind == "cutlass":
-                    c = bsm.matmul(a, out = out)
+                    c = bsm.transposed_reverse_matmul(a)
+                    c = c.t()
                 elif kind == "cublas":
                     import block_sparse_native
                     prr = torch.zeros((sizes[2], sizes[0]), device="cuda")
                     prr = prr.t()
                     cs = block_sparse_native.blocksparse_matmul_transpose_dense(a, dbsm, prr)
                 elif kind == "cuda":
-                    c = bsm.transposed_matmul(a)
+                    c = bsm.matmul_cuda(a)
 
             end.record()
             torch.cuda.synchronize()

@@ -231,7 +231,7 @@ class BlockSparseMatrix:
 
         return out2
 
-    def matmul(self, dense_a):
+    def transposed_reverse_matmul(self, dense_a):
         """Compute a.matmul(self.t()) """
         import block_sparse_native
         shape_a = dense_a.shape
@@ -243,7 +243,6 @@ class BlockSparseMatrix:
         out = torch.zeros((shape_b[1], shape_a[0]), device = dense_a.device)
         #print("stride", out.stride())
 
-        assert(dense_a.is_contiguous())
         assert (self.row_start_ends_a.is_contiguous())
         assert(self.data.is_contiguous())
         assert(out.is_contiguous())
@@ -267,7 +266,7 @@ class BlockSparseMatrix:
         #print("dtype row_start_ends_a", self.row_start_ends_a.dtype, self.row_start_ends_a.stride())
         #print("dtype cols_a_0", cols_a_0.dtype, cols_a_0.stride())
 
-        out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a,
+        out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a.t().contiguous(),
                                                               self.row_start_ends_a, cols_a_0,
                                                               self.data,
                                                               dense_a.shape[0], shape_b[1], shape_b[0],
@@ -276,7 +275,7 @@ class BlockSparseMatrix:
 
         return out2.t()
 
-    def matmul_support(self, dense_a, dense_b, method=0):
+    def matmul_with_output_sparse_support(self, dense_a, dense_b, method=0):
         """Compute  c = a.mm(b) where c is sparse (we just keep the results where c is non_zero)."""
         import block_sparse_native
         shape_a = dense_a.shape

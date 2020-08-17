@@ -149,7 +149,7 @@ class TestFun(TestCase):
 
         block_size = (32, 32)
         iterations = 10
-        inner_iterations = 10
+        inner_iterations = 4
 
         results = self.helper(sizes, block_size, density, iterations, inner_iterations, block_count = None)
 

@@ -453,9 +453,6 @@ struct block_task_back
                 block_item_coords_k),
             block_end_item_k),                                              // block_end_item_k
 
-//            d_c_ptr,                                                          // d_ptr
-//            d_c_indices,                                                      // d_indices,
-
         loader_b(
             d_b,                                                            // d_matrix
             dim_n,                                                          // matrix_values_l

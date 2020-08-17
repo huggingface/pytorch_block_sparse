@@ -241,8 +241,8 @@ struct block_task
             LdgAlignA,                                          // MatrixAlignBytes
             AllowRaggedTiles,                                   // AllowRaggedTiles
             dp_vector_t,                                        // dp_vector_t
-            (TransformA == matrix_transform_t::NonTranspose) ?  // LoadAlgorithm
-                load_algorithm::CongruousCopyPrune :
+            (TransformA == matrix_transform_t::Transpose) ?  // LoadAlgorithm
+                load_algorithm::CrosswiseCopyPrune :
                 load_algorithm::CrosswiseCopy>
         block_loader_a_t;
 
@@ -256,8 +256,8 @@ struct block_task
             LdgAlignB,                                          // MatrixAlignBytes
             AllowRaggedTiles,                                   // AllowRaggedTiles
             dp_vector_t,                                        // dp_vector_t
-            (TransformB == matrix_transform_t::NonTranspose) ?  // LoadAlgorithm
-                load_algorithm::CrosswiseCopyPrune :
+            (TransformB == matrix_transform_t::Transpose) ?  // LoadAlgorithm
+                load_algorithm::CongruousCopyPrune :
                 load_algorithm::CongruousCopy>
         block_loader_b_t;
 
@@ -447,8 +447,7 @@ struct block_task
             d_ptr,                                                          // d_ptr
             d_indices,                                                      // d_indices,
             dim_m,                                                          // matrix_values_l
-            (TransformA == matrix_transform_t::NonTranspose) ? dim_m : 1,   // matrix_values_stride_k
-            (TransformA == matrix_transform_t::NonTranspose) ? 1 : dim_k,   // matrix_values_stride_l
+            (TransformA == matrix_transform_t::NonTranspose) ? dim_m : 1,    // matrix_values_stride_k
             grid_raster.block_item_coords.x / BlockItemsX,                  // BlockIdX, block index in x dim
             make_int2(                                                      // block_begin_item_coords
                 grid_raster.block_item_coords.y,
@@ -463,6 +462,7 @@ struct block_task
             d_indices,                                                      // d_indices
             dim_n,                                                          // matrix_values_l
             (TransformB == matrix_transform_t::NonTranspose) ? 1 : dim_n,   // matrix_values_stride_k
+            (TransformB == matrix_transform_t::NonTranspose) ? dim_k : 1,   // matrix_values_stride_l
             grid_raster.block_item_coords.x / BlockItemsX,                  // BlockIdX, block index in x dim
             make_int2(                                                      // block_begin_item_coords
                 grid_raster.block_item_coords.x,

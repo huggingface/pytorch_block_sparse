@@ -145,7 +145,7 @@ class BlockSparseMatrix:
     def to_sparse(self):
         coo = self.build_coo_block_index().long()
 
-        data = self.data.reshape(-1, *self.block_shape)
+        data = self.data.reshape(-1, *self.block_shape).transpose(1,2)
 
         out = torch.sparse.FloatTensor(coo, data,
                                        (self.shape[0] // self.block_shape[0], self.shape[1] // self.block_shape[1]) + self.block_shape)
@@ -266,7 +266,9 @@ class BlockSparseMatrix:
         #print("dtype row_start_ends_a", self.row_start_ends_a.dtype, self.row_start_ends_a.stride())
         #print("dtype cols_a_0", cols_a_0.dtype, cols_a_0.stride())
 
-        out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a.t().contiguous(),
+        print(dense_a.shape)
+        print("blocks", self.blocks)
+        out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a,
                                                               self.row_start_ends_a, cols_a_0,
                                                               self.data,
                                                               dense_a.shape[0], shape_b[1], shape_b[0],
@@ -310,7 +312,7 @@ class BlockSparseMatrix:
                                                             self.blocks, blocks_len)
 
         data_shape = data.shape
-        data = data.view(data_shape[0] // self.block_shape[0], self.block_shape[0], self.block_shape[1]).transpose(1,2)
+        data = data.view(data_shape[0] // self.block_shape[0], self.block_shape[0], self.block_shape[1]) #.transpose(1,2)
 
         self.data = data.reshape(data_shape)
 

@@ -294,7 +294,7 @@ struct block_loader<
 
         // ldg_vector_t coordinates (l, k) of first block-wide tile within the input matrix
         int2 matrix_block_ldgvec_coords = make_int2(
-            offset_tile * BlockItemsX,               // l-coordinate
+            matrix_block_item_coords.x,               // l-coordinate
             0);    // k-coordinate
 
         // printf("BlockIdX: %d, offset_tile: %d, l-coor: %d, k-coor: %d \n", BlockIdX, offset_tile, offset_tile * BlockItemsX, matrix_block_item_coords.y / LdgVectorItems);
@@ -362,12 +362,11 @@ struct block_loader<
             }
         }
 
+#if 1
         int offset = (matrix_thread_ldgvec_coords.y * matrix_ldgvec_stride_k) +
             (matrix_thread_ldgvec_coords.x * matrix_ldgvec_stride_l);
-#if 0
-        printf("offset = %03d, matrix_ldgvec_stride_k=%d, matrix_ldgvec_stride_l=%d, x=%d, y=%d, size = %d\n", offset, matrix_ldgvec_stride_k, matrix_ldgvec_stride_l, matrix_thread_ldgvec_coords.x, matrix_thread_ldgvec_coords.y, (int)sizeof(ldg_vector_t));
+        printf("Crosswise offset init = %03d, matrix_ldgvec_stride_k=%d, matrix_ldgvec_stride_l=%d, x=%d, y=%d, size = %d\n", offset, matrix_ldgvec_stride_k, matrix_ldgvec_stride_l, matrix_thread_ldgvec_coords.x, matrix_thread_ldgvec_coords.y, (int)sizeof(ldg_vector_t));
 #endif
-
 
         // Update the input pointer to be matrix_thread_ldgvec_coords
         this->d_matrix_ldgvecs =

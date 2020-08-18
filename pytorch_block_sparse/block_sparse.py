@@ -83,8 +83,15 @@ class BlockSparseMatrix:
 
     @classmethod
     def zero(cls, shape, n_blocks = None, blocks = None, block_shape=(32, 32), device = None):
+        for i in range(2):
+            if shape[i] % block_shape[i] != 0:
+                raise Exception(f"Invalid shape: shape[{i}]({shape[i]}) %% block_shape[{i}]({block_shape[i]}) is not 0.")
         if n_blocks == None:
             assert(blocks != None)
+            for b in blocks:
+                for i in range(2):
+                    if b[i] * block_shape[i] >= shape[i]:
+                        raise Exception(f"Invalid block definition: block[{i}] = {b[i]} : should be < {shape[i] // block_shape[i]}")
             n_blocks = len(blocks)
         else:
             assert(blocks == None)

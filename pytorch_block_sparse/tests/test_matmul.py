@@ -4,11 +4,12 @@ import unittest
 from pytorch_block_sparse.block_sparse import BlockSparseMatrix
 
 class TestFun(TestCase):
-    def helper(self, sizes, block_size, block_count = None, density = None, blocks = None, iterations = 1):
-        device = "cuda"
+    def helper(self, sizes, block_size, block_count = None, density = None, blocks = None, iterations = 1, device = "cuda", verbose = False):
+        device = device
         a = torch.randn((sizes[0], sizes[1]), device=device)
         torch.set_printoptions(precision=10, edgeitems=100000, linewidth=10000)
-        #print("a=", a, "\n")
+        if verbose:
+            print("a=", a, "\n")
 
         if block_count == None and blocks == None:
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
@@ -16,8 +17,9 @@ class TestFun(TestCase):
 
         bsm = BlockSparseMatrix.randn((sizes[2], sizes[1]), block_count, blocks = blocks, block_shape=block_size, device=device)
         dbsm = bsm.to_dense()
-        #print("b=", dbsm, "\n")
-
+        if verbose:
+            print("b=", dbsm, "\n")
+            print("a.shape", a.shape)
         bsm.check_with_dense(dbsm)
 
         timings = {}
@@ -30,14 +32,15 @@ class TestFun(TestCase):
             for i in range(iterations):
                 if kind == "pytorch":
                     c = a.matmul(dbsm.t())
-                    #print("c=", c, "\n")
+                    if verbose:
+                        print("c=", c, "\n")
 
                 elif kind == "cutlass":
                     c = bsm.transposed_reverse_matmul(a)
                     c = c.t()
                 elif kind == "cublas":
                     import block_sparse_native
-                    prr = torch.zeros((sizes[2], sizes[0]), device="cuda")
+                    prr = torch.zeros((sizes[2], sizes[0]), device=device)
                     prr = prr.t()
                     cs = block_sparse_native.blocksparse_matmul_transpose_dense(a, dbsm, prr)
                 elif kind == "cuda":
@@ -58,37 +61,50 @@ class TestFun(TestCase):
                     continue
                 c = t["result"]
                 torch.set_printoptions(precision=8, edgeitems=100000, linewidth=10000)
-                c_ = c[::,::]
-                c0_ = c0[::,::]
-                #print(c_)
-                #print(c0_)
-                #print((c_ != 0).long())
-                #print((c0_ != 0).long())
-                print("equals", ((c_ - c0_).abs() < 1e-03).long())
+                stride = 1
+                c_ = c[::stride,::stride]
+                c0_ = c0[::stride,::stride]
+                if verbose:
+                    print("c shape", c.shape)
+                    print(c_)
+                    print(c0_)
+                    print((c_ != 0).long())
+                    print((c0_ != 0).long())
+                    print("equals", ((c_ - c0_).abs() < 1e-03).long())
 
                 s = c.isclose(c0, atol=1e-03).all()
                 if not s.item():
-                    print("Comparison NOK : transposed_matmul issue for ", k)
+                    raise Exception("Comparison NOK : transposed_matmul issue for ", k)
                     print("max difference %s=" % t["kind"], (c - c0).abs().max())
                     t["comparison"] = False
                 else:
                     print("Comparison OK for transposed_matmul for ", k)
                     print("max difference %s=" % t["kind"], (c - c0).abs().max())
                     t["comparison"] = True
-                #print("c_cutlass=", c)
+                if verbose:
+                    print("c_cutlass=", c)
         torch.set_printoptions(profile="default")
 
         return timings
 
 
     def test0(self):
-        sizes = [32, 32, 32]
+        tests = [{"sizes":[32, 32, 32],
+                  "block_setups":[
+                    [(0,0)],
+                                  ]
+                  },
+                 {"sizes":[32, 64, 32],
+                  "block_setups":[
+                    [(0,0)],
+                                  ]
+                  }]
         block_size = (32,32)
-        blocks = [(0,0)]
-        for i in range(1):
-            time_sparse, time_dense = self.helper(sizes, block_size, density = None, blocks = blocks)
-            if i != 0:
-                print("time_sparse=%f, time_dense = %s" % (time_sparse, time_dense))
+        device = "cuda"
+        for test_info in tests:
+            sizes = test_info["sizes"]
+            for blocks in test_info["block_setups"]:
+                timings = self.helper(sizes, block_size, density = None, blocks = blocks, device =device)
 
     def tst1(self):
         size = 512

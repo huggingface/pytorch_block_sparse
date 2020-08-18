@@ -266,8 +266,6 @@ class BlockSparseMatrix:
         #print("dtype row_start_ends_a", self.row_start_ends_a.dtype, self.row_start_ends_a.stride())
         #print("dtype cols_a_0", cols_a_0.dtype, cols_a_0.stride())
 
-        print(dense_a.shape)
-        print("blocks", self.blocks)
         out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a,
                                                               self.row_start_ends_a, cols_a_0,
                                                               self.data,
@@ -301,18 +299,16 @@ class BlockSparseMatrix:
         assert(shape_c[0] == shape_a[0])
         assert(shape_c[1] == shape_b[1])
 
-        data = self.data
-
         blocks_len = len(self.blocks) // 2
 
         block_sparse_native.blocksparse_matmul_back_cutlass(dense_a, dense_b,
                                                             shape_a[0], shape_b[1], shape_a[1],
                                                             self.block_shape[0], self.block_shape[1],
-                                                            data,
+                                                            self.data,
                                                             self.blocks, blocks_len)
 
         data_shape = data.shape
-        data = data.view(data_shape[0] // self.block_shape[0], self.block_shape[0], self.block_shape[1]) #.transpose(1,2)
+        data = data.view(data_shape[0] // self.block_shape[0], self.block_shape[0], self.block_shape[1])
 
         self.data = data.reshape(data_shape)
 

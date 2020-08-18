@@ -294,7 +294,26 @@ struct block_loader<
         // check if the residue-tile is prune or not
         int last_k_tile_coords = indices[offset_tile + wholek_tiles_remaining - 1];
         last_k_tile_non_prune = (BlockItemsK * (last_k_tile_coords + 1) >= block_end_item_k)? true : false;
+#if 0
+        printf("Congruous ThreadLdgVectorsK=%d\n", (int)ThreadLdgVectorsK);
+        printf("Congruous ThreadLdgVectorsL=%d\n",  (int)ThreadLdgVectorsL);
+        printf("Congruous LdgVectorDpVectors=%d\n", (int)sizeof(LdgVectorDpVectors));
+        printf("Congruous matrix_items_l=%d\n", int(matrix_items_l));
+        printf("Congruous LdgVectorItems=%d\n", int(LdgVectorItems));
+        printf("Congruous matrix_ldgvecs_l=%d\n", int(matrix_ldgvecs_l));
+        printf("Congruous matrix_ldgvec_stride_k=%d\n", int(matrix_ldgvec_stride_k));
+        printf("Congruous matrix_ldgvec_stride_l=%d\n", int(matrix_ldgvec_stride_l));
+        printf("Congruous DpVectorItems=%d\n", int(DpVectorItems));
+        printf("Congruous LdgVectorDpVectors=%d\n", int(LdgVectorDpVectors));
 
+        printf("Congruous matrix_items_stride_k=%d\n", int(matrix_items_stride_k));
+        printf("Congruous ThreadDpVectors=%d\n", int(ThreadDpVectors));
+        printf("Congruous BlockDpVectors=%d\n", int(BlockDpVectors));
+        printf("Congruous BlockDpVectorsK=%d\n", int(BlockDpVectorsK));
+        printf("Congruous BlockDpVectorsL=%d\n", int(BlockDpVectorsL));
+        printf("Congruous BlockThreads=%d\n", int(BlockThreads));
+        printf("Congruous ThreadDpVectors=%d\n", int(ThreadDpVectors));
+#endif
         // debug
         // if(threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0) 
         //     printf("block: (%d, %d, %d), thread: (%d, %d), blockIdX: %d, ptr: %d, offset_tile: %d, wholek_tiles_remaining: %d \n", 

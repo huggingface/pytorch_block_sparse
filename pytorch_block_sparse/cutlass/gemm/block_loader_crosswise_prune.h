@@ -207,7 +207,7 @@ struct block_loader<
     int matrix_ldgvec_stride_k;
 
     /// Distance in ldg_vector_t within pitched-linear memory between successive coordinates along the L-axis
-    // int matrix_ldgvec_stride_l;
+    int matrix_ldgvec_stride_l;
 
     /// Distance in ldg_vector_t within pitched-linear memory between successive coordinates along tiles' L-axis
     int matrix_ldgvec_stride_tile_l;
@@ -227,7 +227,6 @@ struct block_loader<
     //-------------------------------------------------------------------------
     // Constructor API
     //-------------------------------------------------------------------------
-
     /// Constructor
     inline __device__
     block_loader(
@@ -236,6 +235,7 @@ struct block_loader<
         int *indices,                   ///< Input pointer to indices of pruned B matrix in value_t
         int matrix_items_l,             ///< Extent of the input matrix in value_t along the L-axis  // dim_n
         int matrix_items_stride_k,      ///< Distance in value_t within pitched-linear memory between successive coordinates along the K-axis // 1
+        int matrix_items_stride_l,
         int BlockIdX,                   ///< block coordinate in x-dim
         int2 matrix_block_item_coords,  ///< value_t coordinates (l, k) of first block-wide tile within the input matrix // (grid_raster.block_item_coords.x, block_item_coords_k )
         int block_end_item_k)           ///< Thread block's ending coordinate (k) within the input matrix (one-past) // block_end_item_k
@@ -247,7 +247,7 @@ struct block_loader<
         // block information
         // get the L-dim index of block in the matrix regardless of column-major format or row-major format
         // int BlockIdX  = matrix_block_item_coords.x / BlockItemsX;
-        int matrix_items_stride_tile_l = BlockItemsK;
+        int matrix_items_stride_tile_l = matrix_items_stride_l / BlockLdgVectorsK; // CHANGED
         int entire_wholek_tiles = ptr[BlockIdX + 1] - ptr[BlockIdX];
         // Iteration range in "whole-k" block-wide tiles & offset_tile
         wholek_tiles_remaining = entire_wholek_tiles / gridDim.z; 
@@ -262,8 +262,30 @@ struct block_loader<
 
         matrix_ldgvecs_l = matrix_items_l;
         matrix_ldgvec_stride_k = matrix_items_stride_k;
-        // matrix_ldgvec_stride_l = matrix_items_stride_l / LdgVectorItems;
+        matrix_ldgvec_stride_l = matrix_items_stride_l / LdgVectorItems; // CHANGED
         matrix_ldgvec_stride_tile_l = matrix_items_stride_tile_l / LdgVectorItems;
+#if 0
+        printf("Crosswise ThreadLdgVectorsK=%d\n", (int)ThreadLdgVectorsK);
+        printf("Crosswise ThreadLdgVectorsL=%d\n",  (int)ThreadLdgVectorsL);
+        printf("Crosswise LdgVectorDpVectors=%d\n", (int)sizeof(LdgVectorDpVectors));
+        printf("Crosswise matrix_items_l=%d\n", int(matrix_items_l));
+        printf("Crosswise LdgVectorItems=%d\n", int(LdgVectorItems));
+        printf("Crosswise matrix_ldgvecs_l=%d\n", int(matrix_ldgvecs_l));
+        printf("Crosswise matrix_ldgvec_stride_k=%d\n", int(matrix_ldgvec_stride_k));
+        printf("Crosswise matrix_ldgvec_stride_l=%d\n", int(matrix_ldgvec_stride_l));
+        printf("Crosswise DpVectorItems=%d\n", int(DpVectorItems));
+        printf("Crosswise LdgVectorDpVectors=%d\n", int(LdgVectorDpVectors));
+
+        printf("Crosswise matrix_items_stride_k=%d\n", int(matrix_items_stride_k));
+        printf("Crosswise ThreadDpVectors=%d\n", int(ThreadDpVectors));
+        printf("Crosswise BlockDpVectors=%d\n", int(BlockDpVectors));
+        printf("Crosswise BlockDpVectorsK=%d\n", int(BlockDpVectorsK));
+        printf("Crosswise BlockDpVectorsL=%d\n", int(BlockDpVectorsL));
+        printf("Crosswise BlockThreads=%d\n", int(BlockThreads));
+        printf("Crosswise ThreadDpVectors=%d\n", int(ThreadDpVectors));
+        printf("Crosswise ThreadLdgVectorsL=%d\n", ThreadLdgVectorsL);
+        printf("Crosswise StripmineLdgVectorsL=%d\n", StripmineLdgVectorsL);
+#endif
 
         // ldg_vector_t coordinates (l, k) of thread-tile within the block-wide tile
         block_thread_ldgvec_coords = make_int2(
@@ -340,11 +362,18 @@ struct block_loader<
             }
         }
 
+        int offset = (matrix_thread_ldgvec_coords.y * matrix_ldgvec_stride_k) +
+            (matrix_thread_ldgvec_coords.x * matrix_ldgvec_stride_l);
+#if 0
+        printf("offset = %03d, matrix_ldgvec_stride_k=%d, matrix_ldgvec_stride_l=%d, x=%d, y=%d, size = %d\n", offset, matrix_ldgvec_stride_k, matrix_ldgvec_stride_l, matrix_thread_ldgvec_coords.x, matrix_thread_ldgvec_coords.y, (int)sizeof(ldg_vector_t));
+#endif
+
+
         // Update the input pointer to be matrix_thread_ldgvec_coords
         this->d_matrix_ldgvecs =
             reinterpret_cast<ldg_vector_t*>(d_matrix_items) +
             (matrix_thread_ldgvec_coords.y * matrix_ldgvec_stride_k) +
-            (matrix_thread_ldgvec_coords.x * matrix_ldgvec_stride_tile_l);
+            (matrix_thread_ldgvec_coords.x * matrix_ldgvec_stride_l); // CHANGED
     }
 
 
@@ -374,11 +403,17 @@ struct block_loader<
 
                 if (!AllowRaggedTiles || valid)
                 {
+                    int offset = (thread_ldgvec_k * StripmineLdgVectorsK * matrix_ldgvec_stride_k) +
+                        (thread_ldgvec_l * StripmineLdgVectorsL * matrix_ldgvec_stride_l);
+#if 0
+                    printf("offset=%d, thread_ldgvec_k=%d, StripmineLdgVectorsK=%d, matrix_ldgvec_stride_k=%d, thread_ldgvec_l=%d, StripmineLdgVectorsL=%d, matrix_ldgvec_stride_l=%d\n",
+                            offset, thread_ldgvec_k, StripmineLdgVectorsK, matrix_ldgvec_stride_k, thread_ldgvec_l, StripmineLdgVectorsL, matrix_ldgvec_stride_l);
+#endif
                     // Perform load
                     thread_tile[thread_ldgvec_k][thread_ldgvec_l].load(
                         d_matrix_ldgvecs +
                         (thread_ldgvec_k * StripmineLdgVectorsK * matrix_ldgvec_stride_k) +
-                        (thread_ldgvec_l * StripmineLdgVectorsL * matrix_ldgvec_stride_tile_l));
+                        (thread_ldgvec_l * StripmineLdgVectorsL * matrix_ldgvec_stride_l)); // CHANGED
                 }
                 else
                 {

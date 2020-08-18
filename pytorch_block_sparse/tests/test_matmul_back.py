@@ -103,14 +103,14 @@ class TestFun(TestCase):
 
         return results
 
-    def check(self, results, block_size):
+    def check(self, results, block_size, blocks):
         cutlass_result = results["cutlass"]["output"]
         pytorch_result = results["pytorch"]["output"]
 
         #print(cutlass_result)
 
-        #print("cutlass block[0][0]", cutlass_result.data[::32, ::32])
-        #print("pytorch blocks[0][0]", pytorch_result[::32, ::32])
+        #print("cutlass block[0][0]", cutlass_result.data[::16, ::16])
+        #print("pytorch blocks[0][0]", pytorch_result[::16, ::16])
         for i in range(cutlass_result.blocks.shape[0] // 2):
             #print("i=", i)
             b = cutlass_result.blocks[i * 2:i * 2+2].flip(0) * torch.tensor(block_size, device=cutlass_result.blocks.device)
@@ -118,7 +118,7 @@ class TestFun(TestCase):
 
             b_pytorch = pytorch_result[b[0]:b[0] + block_size[0], b[1]:b[1] + block_size[1]]
 
-            b_cutlass = cutlass_result.data[i*32:i*32 + 32]
+            b_cutlass = cutlass_result.data[i*32:i*32 + 32].t()
             #print("cutlass full block\n", b_cutlass)
             #print("pytorch extracted block\n", b_pytorch)
 
@@ -128,10 +128,10 @@ class TestFun(TestCase):
             #break
             if not compare.all().item():
                 #print("error on : i = %d" % i)
-                raise Exception("Comparison failed")
+                raise Exception("Comparison failed", blocks)
 
 
-    def tst0(self):
+    def test0(self):
         size = 32
         sizes = [size * 2, size * 4, size * 8]
         block_size = (32, 32)
@@ -139,9 +139,9 @@ class TestFun(TestCase):
         block_tests = [[(0, 0)],[(0,1)], [(1,0)], [(1,0), (0,2)], [(1,0), (2,0), (3,0)]]
         for blocks in block_tests:
             results = self.helper(sizes, block_size, density = None, blocks = blocks, iterations = 1, inner_iterations = 1)
-            self.check(results, block_size)
+            self.check(results, block_size, blocks)
 
-    def test1(self):
+    def tst1(self):
         size = 512
         sizes = [size * 16 * 8, size * 2, size * 4]
 

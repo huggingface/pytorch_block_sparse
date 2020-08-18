@@ -448,6 +448,7 @@ struct block_task
             d_indices,                                                      // d_indices,
             dim_m,                                                          // matrix_values_l
             (TransformA == matrix_transform_t::NonTranspose) ? dim_m : 1,    // matrix_values_stride_k
+            (TransformB == matrix_transform_t::NonTranspose) ? 1 : dim_k,   // matrix_values_stride_l
             grid_raster.block_item_coords.x / BlockItemsX,                  // BlockIdX, block index in x dim
             make_int2(                                                      // block_begin_item_coords
                 grid_raster.block_item_coords.y,

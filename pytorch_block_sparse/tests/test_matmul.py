@@ -74,9 +74,9 @@ class TestFun(TestCase):
 
                 s = c.isclose(c0, atol=1e-03).all()
                 if not s.item():
-                    raise Exception("Comparison NOK : transposed_matmul issue for ", k)
                     print("max difference %s=" % t["kind"], (c - c0).abs().max())
                     t["comparison"] = False
+                    raise Exception("Comparison NOK : transposed_matmul issue for ", k)
                 else:
                     print("Comparison OK for transposed_matmul for ", k)
                     print("max difference %s=" % t["kind"], (c - c0).abs().max())
@@ -98,15 +98,45 @@ class TestFun(TestCase):
                   "block_setups":[
                     [(0,0)],
                                   ]
-                  }]
+                  },
+                 {"sizes": [64, 32, 32],
+                  "block_setups": [
+                      [(0, 0)],
+                  ]
+                  },
+                 {"sizes": [128, 32, 32],
+                  "block_setups": [
+                      [(0, 0)],
+                  ]
+                 },
+                 {"sizes": [128, 64, 32],
+                  "block_setups": [
+                      [(0, 0)],
+                      [(0, 1)],
+                      [(0, 0), (0,1)],
+                  ]
+                  }
+                 ]
+        tests += [{"sizes": [32, 32, 64],
+                  "block_setups": [
+                      [(1,0)],
+                      [(0,0)],
+                      [(0,0), (1,0)],
+                  ]
+                 }                 
+                 ]
+        
+        #tests = tests[0:1]
+
         block_size = (32,32)
         device = "cuda"
         for test_info in tests:
             sizes = test_info["sizes"]
             for blocks in test_info["block_setups"]:
-                timings = self.helper(sizes, block_size, density = None, blocks = blocks, device =device)
+                print(sizes, blocks)
+                timings = self.helper(sizes, block_size, density = None, blocks = blocks, device =device, verbose= False)
 
-    def tst1(self):
+    def test1(self):
         size = 512
         sizes = [size * 16 * 8, size * 2, size * 4]
         density = 0.42
@@ -115,7 +145,7 @@ class TestFun(TestCase):
         flops = float(2 * sizes[0] * sizes[1] * sizes[2])
 
         block_size = (32, 32)
-        iterations = 40
+        iterations = 10
 
         results = {}
         for i in range(10):

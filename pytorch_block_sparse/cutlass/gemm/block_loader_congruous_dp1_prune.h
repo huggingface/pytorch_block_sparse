@@ -97,6 +97,9 @@ struct block_loader<
 
     enum
     {
+        /// BlockItemsX
+        BlockItemsX = BlockDpVectorsL,
+        
         /// BlockItemsK
         BlockItemsK = BlockDpVectorsK,
 
@@ -217,17 +220,7 @@ struct block_loader<
 
     /// Check if the last tile in k-dim is pruned or not
     bool last_k_tile_non_prune;
-
-    /// offset of d_matrix_ldgvects
-    ldg_vector_t *offset_d_matrix_ldgvecs;
-
-    /// the order of current tile
-    int tile_order;
-
-    /// indices
-    int *indices;
-
-
+    
     //-------------------------------------------------------------------------
     // Constructor API
     //-------------------------------------------------------------------------
@@ -247,9 +240,10 @@ struct block_loader<
     :
         block_end_ldgvec_k(block_end_item_k),
         guard(0),
-        residue_guard(0),
-        indices(indices)
+        residue_guard(0)
     {
+        matrix_items_stride_k = BlockItemsK ;
+        //matrix_items_stride_l = BlockItemsX ;
         // block information
         int entire_wholek_tiles = ptr[BlockIdX + 1] - ptr[BlockIdX];
         // Iteration range in "whole-k" block-wide tiles & offset_tile
@@ -265,9 +259,9 @@ struct block_loader<
         // printf("BlockIdX: %d \n", BlockIdX);
 
         matrix_ldgvecs_l = matrix_items_l / LdgVectorItems;
-        matrix_ldgvec_stride_k = matrix_items_stride_k / LdgVectorItems,
+        matrix_ldgvec_stride_k = matrix_items_stride_k / LdgVectorItems;
         matrix_ldgvec_stride_l = matrix_items_stride_l;
-
+        
         // ldg_vector_t coordinates (l, k) of thread-tile within the block-wide tile
         block_thread_ldgvec_coords = make_int2(
             threadIdx.x % BlockLdgVectorsL,                 // l-coordinate
@@ -275,8 +269,9 @@ struct block_loader<
 
         // ldg_vector_t coordinates (l, k) of first block-wide tile within the input matrix
         int2 matrix_block_ldgvec_coords = make_int2(
-            matrix_block_item_coords.x / LdgVectorItems,     // l-coordinate
-            0);                                              // k-coordinate
+            0,
+            offset_tile * BlockItemsX     // l-coordinate
+            );                                              // k-coordinate
             //matrix_block_item_coords.y);                    // k-coordinate
 
         // Iteration span in ldg_vector_t
@@ -313,6 +308,11 @@ struct block_loader<
         printf("Congruous BlockDpVectorsL=%d\n", int(BlockDpVectorsL));
         printf("Congruous BlockThreads=%d\n", int(BlockThreads));
         printf("Congruous ThreadDpVectors=%d\n", int(ThreadDpVectors));
+        printf("Congruous BlockLdgVectors=%d\n", int(BlockLdgVectors));
+        printf("Congruous BlockItemsK=%d\n", int(BlockItemsK));
+        printf("Congruous BlockItemsX=%d\n", int(BlockItemsX));
+        printf("Congruous offset_tile=%d\n", int(offset_tile));
+        
 #endif
         // debug
         // if(threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0) 
@@ -356,14 +356,18 @@ struct block_loader<
             }
         }
 
+#if 0
+        int offset = (matrix_thread_ldgvec_coords.y * matrix_ldgvec_stride_k) +
+            (matrix_thread_ldgvec_coords.x * matrix_ldgvec_stride_l);
+        printf("Congruous offset init = %03d, matrix_ldgvec_stride_k=%d, matrix_ldgvec_stride_l=%d, x=%d, y=%d, size = %d\n", offset, matrix_ldgvec_stride_k, matrix_ldgvec_stride_l, matrix_thread_ldgvec_coords.x, matrix_thread_ldgvec_coords.y, (int)sizeof(ldg_vector_t));
+#endif
+
         // Update the input pointer to be matrix_thread_ldgvec_coords
-        this->offset_d_matrix_ldgvecs =
+        this->d_matrix_ldgvecs =
             reinterpret_cast<ldg_vector_t*>(d_matrix_items) +
             (matrix_thread_ldgvec_coords.y * matrix_ldgvec_stride_k) +
             (matrix_thread_ldgvec_coords.x * matrix_ldgvec_stride_l);
 
-        // initialize tile order
-        tile_order = 0;
     }
 
 
@@ -377,10 +381,6 @@ struct block_loader<
     inline __device__
     void request()
     {
-        // pointer of the tile
-        d_matrix_ldgvecs = offset_d_matrix_ldgvecs + 
-                        (matrix_ldgvec_stride_k * BlockLdgVectorsK) * indices[offset_tile + tile_order];
-
         // Outer thread-tile ldg_vector_t iteration (K-axis)
         #pragma unroll
         for (int thread_ldgvec_k = 0; thread_ldgvec_k < ThreadLdgVectorsK; ++thread_ldgvec_k)
@@ -421,8 +421,8 @@ struct block_loader<
     inline __device__
     void next()
     {
-        tile_order += 1;
-
+        d_matrix_ldgvecs += BlockLdgVectors;
+        
         if (AllowRaggedTiles)
         {
             --wholek_tiles_remaining;

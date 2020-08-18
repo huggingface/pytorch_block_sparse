@@ -186,7 +186,7 @@ struct block_loader<
     //-------------------------------------------------------------------------
 
     /// Input pointer to matrix in ldg_vector_t
-    ldg_vector_t *d_matrix_ldgvecs;
+    ldg_vector_t *offset_d_matrix_ldgvecs;
 
     /// Extent of the input matrix in ldg_vector_t along the L-axis
     int matrix_ldgvecs_l;
@@ -223,6 +223,12 @@ struct block_loader<
 
     /// Check if the last tile in k-dim is pruned or not
     bool last_k_tile_non_prune;
+    
+    /// indices
+    int *indices;  
+    
+     /// the order of current tile
+    int tile_order;
 
     //-------------------------------------------------------------------------
     // Constructor API
@@ -242,7 +248,9 @@ struct block_loader<
     :
         block_end_ldgvec_k(block_end_item_k),
         guard(0),
-        residue_guard(0)
+        residue_guard(0),
+        indices(indices),
+        tile_order(0)
     {
         // block information
         // get the L-dim index of block in the matrix regardless of column-major format or row-major format
@@ -362,14 +370,14 @@ struct block_loader<
             }
         }
 
-#if 1
+#if 0
         int offset = (matrix_thread_ldgvec_coords.y * matrix_ldgvec_stride_k) +
             (matrix_thread_ldgvec_coords.x * matrix_ldgvec_stride_l);
         printf("Crosswise offset init = %03d, matrix_ldgvec_stride_k=%d, matrix_ldgvec_stride_l=%d, x=%d, y=%d, size = %d\n", offset, matrix_ldgvec_stride_k, matrix_ldgvec_stride_l, matrix_thread_ldgvec_coords.x, matrix_thread_ldgvec_coords.y, (int)sizeof(ldg_vector_t));
 #endif
 
         // Update the input pointer to be matrix_thread_ldgvec_coords
-        this->d_matrix_ldgvecs =
+        this->offset_d_matrix_ldgvecs =
             reinterpret_cast<ldg_vector_t*>(d_matrix_items) +
             (matrix_thread_ldgvec_coords.y * matrix_ldgvec_stride_k) +
             (matrix_thread_ldgvec_coords.x * matrix_ldgvec_stride_l); // CHANGED
@@ -386,6 +394,13 @@ struct block_loader<
     inline __device__
     void request()
     {
+      /// Input pointer to matrix in ldg_vector_t
+        ldg_vector_t *d_matrix_ldgvecs;
+        
+        //printf("Crosswise offset2=%d\n", (matrix_ldgvec_stride_k * BlockLdgVectorsK) * indices[offset_tile + tile_order]);
+         // pointer of the tile
+        d_matrix_ldgvecs = offset_d_matrix_ldgvecs + (matrix_ldgvec_stride_k * BlockLdgVectorsK) * indices[offset_tile + tile_order];
+        
         // Outer thread-tile ldg_vector_t iteration (K-axis)
         #pragma unroll
         for (int thread_ldgvec_k = 0; thread_ldgvec_k < ThreadLdgVectorsK; ++thread_ldgvec_k)
@@ -432,8 +447,7 @@ struct block_loader<
     inline __device__
     void next()
     {
-        d_matrix_ldgvecs += BlockLdgVectors; //(matrix_ldgvec_stride_k * BlockLdgVectorsK);
-
+        tile_order += 1;
         if (AllowRaggedTiles)
         {
             --wholek_tiles_remaining;
@@ -444,6 +458,7 @@ struct block_loader<
                 guard = residue_guard;
             }
         }
+        
     }
 
 

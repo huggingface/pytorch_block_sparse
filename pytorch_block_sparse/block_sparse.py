@@ -276,7 +276,7 @@ class BlockSparseMatrix:
         return out2.t()
 
     def matmul_with_output_sparse_support(self, dense_a, dense_b, method=0):
-        """Compute  c = a.mm(b) where c is sparse (we just keep the results where c is non_zero)."""
+        """Compute  c = a.t().mm(b) where c is sparse (we just keep the results where c is non_zero)."""
         import block_sparse_native
         shape_a = dense_a.shape
         shape_b = dense_b.shape
@@ -295,14 +295,14 @@ class BlockSparseMatrix:
             print()
             print()
 
-        assert(shape_a[1] == shape_b[0])
-        assert(shape_c[0] == shape_a[0])
+        assert(shape_a[0] == shape_b[0])
+        assert(shape_c[0] == shape_a[1])
         assert(shape_c[1] == shape_b[1])
 
         blocks_len = len(self.blocks) // 2
 
         block_sparse_native.blocksparse_matmul_back_cutlass(dense_a, dense_b,
-                                                            shape_a[0], shape_b[1], shape_a[1],
+                                                            shape_a[1], shape_b[1], shape_a[0],
                                                             self.block_shape[0], self.block_shape[1],
                                                             self.data,
                                                             self.blocks, blocks_len)

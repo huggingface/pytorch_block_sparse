@@ -241,7 +241,7 @@ struct block_task_back
             LdgAlignA,                                          // MatrixAlignBytes
             AllowRaggedTiles,                                   // AllowRaggedTiles
             dp_vector_t,                                        // dp_vector_t
-            load_algorithm::CrosswiseCopy>                      // LoadAlgorithm
+            load_algorithm::CongruousCopy>                      // LoadAlgorithm
             block_loader_a_t;
 
 

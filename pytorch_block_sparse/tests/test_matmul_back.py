@@ -9,8 +9,8 @@ class TestFun(TestCase):
     def helper_(self, sizes, block_size, block_count = None, blocks = None, density = None, iterations = 1):
         device = "cuda"
         a = torch.randn((sizes[0], sizes[1]), device=device)
-        b0 = torch.randn((sizes[0], sizes[2]), device=device)
-        b1 = b0.t().contiguous()
+        b = torch.randn((sizes[0], sizes[2]), device=device)
+
 
         if block_count == None and blocks == None:
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
@@ -31,9 +31,9 @@ class TestFun(TestCase):
             start.record()
             for i in range(iterations):
                 if kind == "pytorch":
-                    c = b0.t().mm(a)
+                    c = b.t().mm(a)
                 elif kind == "cutlass":
-                    c = bsm.matmul_with_output_sparse_support(b1, a)
+                    c = bsm.matmul_with_output_sparse_support(b, a)
 
 
             end.record()
@@ -103,14 +103,16 @@ class TestFun(TestCase):
 
         return results
 
-    def check(self, results, block_size, blocks):
+    def check(self, results, block_size, blocks, verbose = False):
         cutlass_result = results["cutlass"]["output"]
         pytorch_result = results["pytorch"]["output"]
 
-        #print(cutlass_result)
+        if verbose:
+            #print(cutlass_result)
 
-        #print("cutlass block[0][0]", cutlass_result.data[::16, ::16])
-        #print("pytorch blocks[0][0]", pytorch_result[::16, ::16])
+            stride = 4
+            print("cutlass block[0][0]", cutlass_result.data[::stride, ::stride])
+            print("pytorch blocks[0][0]", pytorch_result[::stride, ::stride])
         for i in range(cutlass_result.blocks.shape[0] // 2):
             #print("i=", i)
             b = cutlass_result.blocks[i * 2:i * 2+2].flip(0) * torch.tensor(block_size, device=cutlass_result.blocks.device)
@@ -139,16 +141,18 @@ class TestFun(TestCase):
         block_tests = [[(0, 0)],[(0,1)], [(1,0)], [(1,0), (0,2)], [(1,0), (2,0), (3,0)]]
         for blocks in block_tests:
             results = self.helper(sizes, block_size, density = None, blocks = blocks, iterations = 1, inner_iterations = 1)
-            self.check(results, block_size, blocks)
+            self.check(results, block_size, blocks, verbose = False)
+            #break
 
     def test1(self):
         size = 512
         sizes = [size * 16 * 8, size * 2, size * 4]
 
         density = 0.47
+        density = 1.0
 
         block_size = (32, 32)
-        iterations = 10
+        iterations = 2
         inner_iterations = 4
 
         results = self.helper(sizes, block_size, density, iterations, inner_iterations, block_count = None)

@@ -33,6 +33,9 @@ class BlockSparseMatrix:
 
         self.data = data
 
+        self.sanity_check(self.cols_a, self.row_start_ends_a, self.shape, self.block_shape)
+        self.sanity_check(self.rows_b, self.col_start_ends_b, (self.shape[1], self.shape[0]), (self.block_shape[1], self.block_shape[0]))
+
     @staticmethod
     def blocks_count_(shape, block_shape):
         return torch.Size((shape[0] // block_shape[0], shape[1] // block_shape[1]))
@@ -69,9 +72,8 @@ class BlockSparseMatrix:
 
         row_start_ends.index_add_(0, rows + 1, torch.ones(size=(cols.shape[0],), dtype=torch.long, device = self.device))
         row_start_ends = row_start_ends.cumsum(0).int()
-        cols = cols.int()
 
-        #cols = torch.stack([cols, block_shuffle], 1).int()
+        cols = torch.stack([cols, block_shuffle], 1).int()
 
         return cols, row_start_ends
 
@@ -147,13 +149,12 @@ class BlockSparseMatrix:
         rows = rows[:-1]
 
         # Build the coo indexes
-        return torch.stack([rows, self.cols_a.int()], 0) # [:,0]
+        return torch.stack([rows, self.cols_a[:,0]], 0)
 
     def to_sparse(self):
         coo = self.build_coo_block_index().long()
 
         data = self.data.reshape(-1, *self.block_shape).transpose(1,2)
-
         out = torch.sparse.FloatTensor(coo, data,
                                        (self.shape[0] // self.block_shape[0], self.shape[1] // self.block_shape[1]) + self.block_shape)
 
@@ -167,12 +168,8 @@ class BlockSparseMatrix:
 
         return out
 
-    def sanity_check(self):
-        cols = self.cols_a
-        row_end = self.row_start_ends_a[1:]
-        shape = self.shape
-        block_shape = self.block_shape
-
+    def sanity_check(self, cols, row_end, shape, block_shape):
+        row_end = row_end[1:]
         if len(cols.shape) != 2:
             raise Exception("cols should be bidimensional, not of shape %s" % cols.shape)
         if cols.dtype != torch.int32:
@@ -180,8 +177,6 @@ class BlockSparseMatrix:
         max_col = cols[:,0].max()
         if max_col > shape[1] / block_shape[1]:
             raise Exception("cols max element (%d) cannot be larger than shape[1]/block_shape[1] (%d)" % (max_col, shape[1] / block_shape[1]))
-
-        self.cols = cols
 
         if len(row_end.shape) != 1:
             raise Exception("row_end should be unidimensional, not of shape %s" % row_end.shape)
@@ -191,13 +186,11 @@ class BlockSparseMatrix:
             raise Exception("row_end should be int32, not of type %s" % row_end.dtype)
 
         max_row_end = row_end.max()
-        if max_row_end > self.cols.shape[0]:
+        if max_row_end > cols.shape[0]:
             raise Exception("row_end max element (%d) cannot be larger than cols count (%d)" % (max_row_end, self.cols.shape[0]))
         last_row_end = row_end[-1]
-        if last_row_end != self.cols.shape[0]:
+        if last_row_end != cols.shape[0]:
             raise Exception("row_end last element (%d) should be equal to cols count (%d)" % (last_row_end, self.cols.shape[0]))
-        self.row_end = row_end
-
 
     def check_with_dense(self, dense_version):
         # Partial check of to_dense
@@ -223,7 +216,7 @@ class BlockSparseMatrix:
 
         out = torch.zeros((shape_a[0], shape_b[1]), device = dense_a.device)
 
-        cols_a = self.cols_a.flatten()
+        cols_a = self.cols_a[:,0].contiguous()
 
         assert(dense_a.is_contiguous())
         assert (self.row_start_ends_a.is_contiguous())

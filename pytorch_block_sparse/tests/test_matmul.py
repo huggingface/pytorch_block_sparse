@@ -119,15 +119,12 @@ class TestFun(TestCase):
                  ]
         tests += [{"sizes": [32, 32, 64],
                   "block_setups": [
-                      [(1,0)],
                       [(0,0)],
+                      [(1, 0)],
                       [(0,0), (1,0)],
                   ]
                  }                 
                  ]
-        
-        #tests = tests[0:1]
-
         block_size = (32,32)
         device = "cuda"
         for test_info in tests:
@@ -139,7 +136,7 @@ class TestFun(TestCase):
     def test1(self):
         size = 512
         sizes = [size * 16 * 8, size * 2, size * 4]
-        density = 0.42
+        #density = 0.42
         density = 1.0
 
         flops = float(2 * sizes[0] * sizes[1] * sizes[2])

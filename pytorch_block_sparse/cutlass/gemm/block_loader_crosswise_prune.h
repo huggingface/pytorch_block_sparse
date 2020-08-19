@@ -268,6 +268,9 @@ struct block_loader<
         else 
             offset_tile += entire_wholek_tiles % gridDim.z;
 
+        // The array of indices contains couples of (row index, blockindex), here we are just interested in row_index
+        offset_tile *= 2;
+
         matrix_ldgvecs_l = matrix_items_l;
         matrix_ldgvec_stride_k = matrix_items_stride_k;
         matrix_ldgvec_stride_l = matrix_items_stride_l / LdgVectorItems; // CHANGED
@@ -440,14 +443,14 @@ struct block_loader<
         }
     }
 
-
     /**
      * Advance the loader to the next block-wide tile in the K-axis
      */
     inline __device__
     void next()
     {
-        tile_order += 1;
+        // The array of indices contains couples of (row index, blockindex) -> increment by 2        
+        tile_order += 2;
         if (AllowRaggedTiles)
         {
             --wholek_tiles_remaining;

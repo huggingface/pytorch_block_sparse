@@ -232,9 +232,9 @@ class BlockSparseMatrix:
         assert(out.is_contiguous())
 
         out2 = block_sparse_native.blocksparse_matmul_transpose_cuda(dense_a,
-                                                          self.row_start_ends_a, cols_a, self.data,
-                                                          *self.shape, *self.block_shape,
-                                                          out)
+                                                                     self.row_start_ends_a, cols_a, self.data,
+                                                                     *self.shape, *self.block_shape,
+                                                                     out)
 
         return out2
 
@@ -313,11 +313,6 @@ class BlockSparseMatrix:
                                                             self.block_shape[0], self.block_shape[1],
                                                             self.data,
                                                             self.blocks, blocks_len)
-
-        data_shape = data.shape
-        data = data.view(data_shape[0] // self.block_shape[0], self.block_shape[0], self.block_shape[1])
-
-        self.data = data.reshape(data_shape)
 
         return self
 

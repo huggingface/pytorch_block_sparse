@@ -141,11 +141,11 @@ class TestFun(TestCase):
             results = self.helper(sizes, block_size, density = None, blocks = blocks, iterations = 1, inner_iterations = 1)
             self.check(results, block_size, blocks)
 
-    def tst1(self):
+    def test1(self):
         size = 512
         sizes = [size * 16 * 8, size * 2, size * 4]
 
-        density = 1.0
+        density = 0.47
 
         block_size = (32, 32)
         iterations = 10
@@ -153,7 +153,7 @@ class TestFun(TestCase):
 
         results = self.helper(sizes, block_size, density, iterations, inner_iterations, block_count = None)
 
-        self.check(results, block_size)
+        self.check(results, block_size, results["cutlass"]["output"].blocks)
 
 
 

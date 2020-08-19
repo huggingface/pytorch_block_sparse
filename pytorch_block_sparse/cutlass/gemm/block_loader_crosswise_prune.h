@@ -417,9 +417,9 @@ struct block_loader<
 
                 if (!AllowRaggedTiles || valid)
                 {
+#if 0
                     int offset = (thread_ldgvec_k * StripmineLdgVectorsK * matrix_ldgvec_stride_k) +
                         (thread_ldgvec_l * StripmineLdgVectorsL * matrix_ldgvec_stride_l);
-#if 0
                     printf("offset=%d, thread_ldgvec_k=%d, StripmineLdgVectorsK=%d, matrix_ldgvec_stride_k=%d, thread_ldgvec_l=%d, StripmineLdgVectorsL=%d, matrix_ldgvec_stride_l=%d\n",
                             offset, thread_ldgvec_k, StripmineLdgVectorsK, matrix_ldgvec_stride_k, thread_ldgvec_l, StripmineLdgVectorsL, matrix_ldgvec_stride_l);
 #endif

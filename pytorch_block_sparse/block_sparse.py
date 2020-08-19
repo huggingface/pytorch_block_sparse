@@ -231,11 +231,16 @@ class BlockSparseMatrix:
 
         return out2
 
-    def transposed_reverse_matmul(self, dense_a):
-        """Compute a.matmul(self.t()) """
+    def transposed_reverse_matmul(self, dense_a, transpose = True):
+        """Compute a.matmul(self.t()) if transposed, else a.matmul(self)"""
         import block_sparse_native
         shape_a = dense_a.shape
-        shape_b = self.shape[1], self.shape[0]
+        shape_b = [self.shape[0], self.shape[1]]
+        block_shape = list(self.block_shape)
+
+        if transpose:
+            shape_b.reverse()
+            block_shape.reverse()
 
         if shape_a[1] != shape_b[0]:
             raise Exception("Invalid matrices sizes (%d, %d) x (%d, %d)" % (shape_a[0], shape_a[1], shape_b[0], shape_b[1]))
@@ -243,37 +248,44 @@ class BlockSparseMatrix:
         out = torch.zeros((shape_b[1], shape_a[0]), device = dense_a.device)
         #print("stride", out.stride())
 
-        assert (self.row_start_ends_a.is_contiguous())
+        if transpose:
+            ptr = self.row_start_ends_a
+            indices = self.cols_a
+            dim = 0
+        else:
+            ptr = self.col_start_ends_b
+            indices = self.rows_b
+            dim = 1
+
         assert(self.data.is_contiguous())
         assert(out.is_contiguous())
 
-        assert(self.cols_a.dtype == torch.int32)
-        cols_a_0 = self.cols_a
-        #print("cols_a_0", cols_a_0)
-        assert(cols_a_0.is_contiguous())
+        assert(ptr.is_contiguous())
+        assert(ptr.dtype == torch.int32)
+        assert(indices.is_contiguous())
+        assert(indices.dtype == torch.int32)
 
-        assert(self.row_start_ends_a.shape[0] == self.blocks_count()[0] + 1)
+        assert(ptr.shape[0] == self.blocks_count()[dim] + 1)
 
-        #assert(self.row_start_ends_a.shape[0] == dense_a.shape[1] / self.block_shape[0] + 1)
-
-        out2 = out.t()
-        #print("out stride", out.stride(), "shape", out.shape)
-        #print("out2 stride", out2.stride(), "shape", out2.shape)
-
-        #print("row_start_ends_a", self.row_start_ends_a)
-        #print("cols_a_0", cols_a_0)
-
-        #print("dtype row_start_ends_a", self.row_start_ends_a.dtype, self.row_start_ends_a.stride())
-        #print("dtype cols_a_0", cols_a_0.dtype, cols_a_0.stride())
+        if transpose:
+            out2 = out.t()
+            data = self.data
+        else:
+            # TEMPORARY : move this to kernel
+            data = self.data.view(-1, *block_shape).transpose(1,2)
+            data = data.reshape(-1, block_shape[1]).contiguous()
+            out2 = out
 
         out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a,
-                                                              self.row_start_ends_a, cols_a_0,
-                                                              self.data,
+                                                              ptr, indices,
+                                                              data,
                                                               dense_a.shape[0], shape_b[1], shape_b[0],
-                                                              self.block_shape[1], self.block_shape[0],
+                                                              block_shape[1], block_shape[0],
                                                               out2)
-
-        return out2.t()
+        if transpose:
+            return out2.t()
+        else:
+            return out2
 
     def matmul_with_output_sparse_support(self, dense_a, dense_b, method=0):
         """Compute  c = a.t().mm(b) where c is sparse (we just keep the results where c is non_zero)."""

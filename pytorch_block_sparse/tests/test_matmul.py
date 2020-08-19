@@ -4,9 +4,13 @@ import unittest
 from pytorch_block_sparse.block_sparse import BlockSparseMatrix
 
 class TestFun(TestCase):
-    def helper(self, sizes, block_size, block_count = None, density = None, blocks = None, iterations = 1, device = "cuda", verbose = False):
+    def helper(self, sizes, block_size, block_count = None, density = None, blocks = None, iterations = 1, device = "cuda", transpose = True, verbose = False):
         device = device
-        a = torch.randn((sizes[0], sizes[1]), device=device)
+        if transpose:
+            a = torch.randn((sizes[0], sizes[1]), device=device)
+        else:
+            a = torch.randn((sizes[0], sizes[2]), device=device)
+
         torch.set_printoptions(precision=10, edgeitems=100000, linewidth=10000)
         if verbose:
             print("a=", a, "\n")
@@ -31,12 +35,17 @@ class TestFun(TestCase):
 
             for i in range(iterations):
                 if kind == "pytorch":
-                    c = a.matmul(dbsm.t())
+                    if transpose:
+                        dbsm_ = dbsm.t()
+                    else:
+                        dbsm_ = dbsm
+                    c = a.matmul(dbsm_)
+
                     if verbose:
                         print("c=", c, "\n")
 
                 elif kind == "cutlass":
-                    c = bsm.transposed_reverse_matmul(a)
+                    c = bsm.transposed_reverse_matmul(a, transpose)
                     c = c.t()
                 elif kind == "cublas":
                     import block_sparse_native
@@ -61,7 +70,7 @@ class TestFun(TestCase):
                     continue
                 c = t["result"]
                 torch.set_printoptions(precision=8, edgeitems=100000, linewidth=10000)
-                stride = 1
+                stride = 8
                 c_ = c[::stride,::stride]
                 c0_ = c0[::stride,::stride]
                 if verbose:
@@ -127,11 +136,13 @@ class TestFun(TestCase):
                  ]
         block_size = (32,32)
         device = "cuda"
-        for test_info in tests:
-            sizes = test_info["sizes"]
-            for blocks in test_info["block_setups"]:
-                print(sizes, blocks)
-                timings = self.helper(sizes, block_size, density = None, blocks = blocks, device =device, verbose= False)
+        #tests = tests[:1]
+        for transpose in [True, False]:
+            for test_info in tests:
+                sizes = test_info["sizes"]
+                for blocks in test_info["block_setups"]:
+                    print(sizes, blocks)
+                    timings = self.helper(sizes, block_size, density = None, blocks = blocks, device =device, verbose= False, transpose = transpose)
 
     def test1(self):
         size = 512
@@ -145,29 +156,31 @@ class TestFun(TestCase):
         iterations = 10
 
         results = {}
-        for i in range(10):
-            timings = self.helper(sizes, block_size, density = density, iterations = iterations)
+        for transpose in [False, True]:
+            for i in range(3):
+                timings = self.helper(sizes, block_size, density = density, iterations = iterations, transpose = True)
 
-            if "pytorch" in timings:
-                pytorch_time = timings["pytorch"]["elapsed"]
-            else:
-                pytorch_time = None
-
-            for kind, d in timings.items():
-                if kind not in results:
-                    results[kind] = {True:0, False:0}
-                if "comparison" in d:
-                    results[kind][d["comparison"]] += 1
-
-                kind = d["kind"]
-                kind_elapsed = d["elapsed"]
-                if pytorch_time == None:
-                    ratio = "Unknown"
+                if "pytorch" in timings:
+                    pytorch_time = timings["pytorch"]["elapsed"]
                 else:
-                    ratio = kind_elapsed / pytorch_time
+                    pytorch_time = None
 
-                print("kind = %s, elapsed=%f, gflops = %f, ratio = %s" % (kind, kind_elapsed, flops * iterations / kind_elapsed / 1e6, ratio))
-        print(results)
+                for kind, d in timings.items():
+                    if kind not in results:
+                        results[kind] = {True:0, False:0}
+                    if "comparison" in d:
+                        results[kind][d["comparison"]] += 1
+
+                    kind = d["kind"]
+                    kind_elapsed = d["elapsed"]
+                    if pytorch_time == None:
+                        ratio = "Unknown"
+                    else:
+                        ratio = kind_elapsed / pytorch_time
+                    gflops = flops * iterations / kind_elapsed / 1e6
+                    print(f"kind = {kind}, transpose = {transpose}, elapsed={kind_elapsed}, gflops = {gflops}, ratio = {ratio}")
+
+            print(results)
 
 if __name__ == '__main__':
     unittest.main()

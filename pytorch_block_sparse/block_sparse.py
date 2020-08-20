@@ -1,12 +1,12 @@
 import torch
 import numpy
 
+
 class BlockSparseMatrix:
     # cols is a list of nonzero block column indexes (int32)
     # row_start is a index into cols (int32)
     # Data is (len(cols), block_shape, block_shape)
     def __init__(self, shape, block_mask, data, block_shape=(16, 16)):
-
         if block_mask.device != data.device:
             raise Exception("block_mask and data should have same device, got %s and %s" % (block_mask.device, data.device))
 
@@ -35,6 +35,7 @@ class BlockSparseMatrix:
 
         self.sanity_check(self.cols_a, self.row_start_ends_a, self.shape, self.block_shape)
         self.sanity_check(self.rows_b, self.col_start_ends_b, (self.shape[1], self.shape[0]), (self.block_shape[1], self.block_shape[0]))
+
 
     @staticmethod
     def blocks_count_(shape, block_shape):
@@ -84,7 +85,8 @@ class BlockSparseMatrix:
         self.rows_b, self.col_start_ends_b  = self.build_indices_(nnz, True)
 
     @classmethod
-    def zero(cls, shape, n_blocks = None, blocks = None, block_shape=(32, 32), device = None):
+    def zeros(cls, shape, n_blocks = None, blocks = None, block_shape=(32, 32), device = "cuda"):
+        assert(device.startswith("cuda"))
         for i in range(2):
             if shape[i] % block_shape[i] != 0:
                 raise Exception(f"Invalid shape: shape[{i}]({shape[i]}) %% block_shape[{i}]({block_shape[i]}) is not 0.")
@@ -118,8 +120,8 @@ class BlockSparseMatrix:
         return cls(shape, block_mask, data, block_shape)
 
     @classmethod
-    def randn(cls, shape, n_blocks, blocks = None, block_shape=(32, 32), device = None):
-        ret = cls.zero(shape, n_blocks, blocks, block_shape, device)
+    def randn(cls, shape, n_blocks, blocks = None, block_shape=(32, 32), device = "cuda"):
+        ret = cls.zeros(shape, n_blocks, blocks, block_shape, device)
         torch.randn(ret.data.shape, out=ret.data)
         return ret
 
@@ -151,17 +153,21 @@ class BlockSparseMatrix:
         # Build the coo indexes
         return torch.stack([rows, self.cols_a[:,0]], 0)
 
-    def to_sparse(self):
+    def to_sparse(self, data_replace = None):
         coo = self.build_coo_block_index().long()
 
-        data = self.data.reshape(-1, *self.block_shape).transpose(1,2)
+        if data_replace is not None:
+            data = data_replace
+        else:
+            data = self.data
+        data = data.reshape(-1, *self.block_shape).transpose(1,2)
         out = torch.sparse.FloatTensor(coo, data,
                                        (self.shape[0] // self.block_shape[0], self.shape[1] // self.block_shape[1]) + self.block_shape)
 
         return out
 
-    def to_dense(self):
-        out = self.to_sparse()
+    def to_dense(self, data_replace = None):
+        out = self.to_sparse(data_replace)
         out = out.to_dense()
         out = out.transpose(1,2)
         out = out.reshape(self.shape[0], self.shape[1])
@@ -267,45 +273,57 @@ class BlockSparseMatrix:
 
         assert(ptr.shape[0] == self.blocks_count()[dim] + 1)
 
+        verbose = False
+        verbose_stride = 8
+
         if transpose:
-            out2 = out.t()
             data = self.data
         else:
             # TEMPORARY : move this to kernel
-            data = self.data.view(-1, *block_shape).transpose(1,2)
+            data = self.data.view(-1, *block_shape)
+            if verbose:
+                print("data #0", data.shape, data[:,::verbose_stride,::verbose_stride])
+            data = data.transpose(1,2)
+            if verbose:
+                print("data #1", data.shape, data[:,::verbose_stride, ::verbose_stride])
             data = data.reshape(-1, block_shape[1]).contiguous()
-            out2 = out
+            if verbose:
+                print("data #2", data.shape, data[::verbose_stride,::verbose_stride])
+            
+        #print(ptr, indices, data, dense_a)
 
-        out2 = block_sparse_native.blocksparse_matmul_cutlass(dense_a,
+        #print(f"ptr={ptr}")
+        #print(f"indices={indices}")
+        #print(f"data={data}")
+        #print(f"dense_a={dense_a}")
+        if verbose:
+            print("dense_a\n", dense_a[::verbose_stride,::verbose_stride])
+            print("ptr", ptr)
+            print("indices", indices)
+            print("transpose", transpose)
+
+        if not dense_a.is_contiguous():
+            print("pytorch_block_sparse.BlockSparseMatrix.transposed_reverse_matmul WARNING: DEGRADED performance, dense_a is not contiguous")
+            print(dense_a.stride())
+
+        dense_a = dense_a.contiguous()
+
+        out = block_sparse_native.blocksparse_matmul_cutlass(dense_a,
                                                               ptr, indices,
                                                               data,
                                                               dense_a.shape[0], shape_b[1], shape_b[0],
                                                               block_shape[1], block_shape[0],
-                                                              out2)
-        if transpose:
-            return out2.t()
-        else:
-            return out2
+                                                              out)
+        if verbose:
+            print("out\n", out.shape, out[::verbose_stride, ::verbose_stride])
+        return out.t()
 
-    def matmul_with_output_sparse_support(self, dense_a, dense_b, method=0):
+    def matmul_with_output_sparse_support(self, dense_a, dense_b, overwrite_data = False):
         """Compute  c = a.t().mm(b) where c is sparse (we just keep the results where c is non_zero)."""
         import block_sparse_native
         shape_a = dense_a.shape
         shape_b = dense_b.shape
         shape_c = self.shape
-
-        def print_sub_matrice(m):
-            for i in range(0, m.shape[0], 32):
-                for offset_x in range(32):
-                    for j in range(0, m.shape[1], 32):
-                        if j != 0:
-                            print("... ", end="")
-                        for offset_y in range(32):
-                            print("%+0.6f " % m[i + offset_x][j + offset_y].item(), end = "")
-                    print()
-                print("...")
-            print()
-            print()
 
         assert(shape_a[0] == shape_b[0])
         assert(shape_c[0] == shape_a[1])
@@ -313,11 +331,24 @@ class BlockSparseMatrix:
 
         blocks_len = len(self.blocks) // 2
 
+        if overwrite_data:
+            data = self.data
+        else:
+            data = torch.zeros_like(self.data)
+            print("ZEROS")
+
+        if not dense_a.is_contiguous():
+            print("pytorch_block_sparse.BlockSparseMatrix.matmul_with_output_sparse_support WARNING: DEGRADED performance, dense_a is not contiguous")
+            dense_a = dense_a.contiguous()
+        if not dense_b.is_contiguous():
+            print("pytorch_block_sparse.BlockSparseMatrix.matmul_with_output_sparse_support WARNING: DEGRADED performance, dense_b is not contiguous")
+            dense_b = dense_b.contiguous()
+
         block_sparse_native.blocksparse_matmul_back_cutlass(dense_a, dense_b,
                                                             shape_a[1], shape_b[1], shape_a[0],
                                                             self.block_shape[0], self.block_shape[1],
-                                                            self.data,
+                                                            data,
                                                             self.blocks, blocks_len)
 
-        return self
+        return data
 

@@ -46,7 +46,6 @@ class TestFun(TestCase):
 
                 elif kind == "cutlass":
                     c = bsm.transposed_reverse_matmul(a, transpose)
-                    c = c.t()
                 elif kind == "cublas":
                     import block_sparse_native
                     prr = torch.zeros((sizes[2], sizes[0]), device=device)
@@ -136,7 +135,7 @@ class TestFun(TestCase):
                  ]
         block_size = (32,32)
         device = "cuda"
-        #tests = tests[:1]
+#        tests = tests[:1]
         for transpose in [True, False]:
             for test_info in tests:
                 sizes = test_info["sizes"]

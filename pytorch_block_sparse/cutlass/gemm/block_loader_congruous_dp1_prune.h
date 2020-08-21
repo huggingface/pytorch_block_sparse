@@ -279,18 +279,18 @@ struct block_loader<
 
               // k-coordinate
 
+#if 0
+
         // Iteration span in ldg_vector_t
         int span_ldgvec_k = (block_end_item_k - matrix_block_item_coords.y);
 
         
-
         // Extent of final residue-tile in ldg_vector_t along K-axis
         int residue_ldgvecs_k = span_ldgvec_k % BlockLdgVectorsK;
 
         // check if the residue-tile is prune or not
         int last_k_tile_coords = indices[offset_tile + wholek_tiles_remaining - 1];
         last_k_tile_non_prune = (BlockItemsK * (last_k_tile_coords + 1) >= block_end_item_k)? true : false;
-#if 0
         printf("Congruous ThreadLdgVectorsK=%d\n", (int)ThreadLdgVectorsK);
         printf("Congruous ThreadLdgVectorsL=%d\n",  (int)ThreadLdgVectorsL);
         printf("Congruous LdgVectorDpVectors=%d\n", (int)sizeof(LdgVectorDpVectors));

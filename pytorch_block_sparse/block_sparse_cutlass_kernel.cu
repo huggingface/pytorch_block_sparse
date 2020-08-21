@@ -14,20 +14,10 @@
 // CUBLAS GEMM API
 #include <cublas_v2.h>
 
-// Set Cutlass debug macro to enable console printing of library errors
-#define DEBUG
-
 // Cutlass GEMM API
 #include <cutlass/util/util.h>
 #include <cutlass/gemm/dispatch.h>
 #include <cutlass/gemm/epilogue_function.h>
-
-// Test utilities
-#include "util/command_line.h"
-#include "util/matrix.h"
-#include "util/timer.h"
-#include "util/type_conversion.h"
-
 
 // Dispatch routines to CUTLASS
 #include "cutlass_dispatch.h"

@@ -27,22 +27,13 @@ setup(name='pytorch_block_sparse',
       install_requires=['click'],
       test_suite='nose.collector',
       tests_require=['nose', 'nose-cover3'],
-      entry_points={
-          'console_scripts': ['pytorch_block_sparse_run=pytorch_block_sparse.command_line:main'],
-      },
       include_package_data=True,
       zip_safe=False,
       ext_modules=[
         CUDAExtension('block_sparse_native',
                       ['pytorch_block_sparse/block_sparse_native.cpp',
-                      'pytorch_block_sparse/block_sparse_cuda_kernel.cu',
-      #                'pytorch_block_sparse/block_sparse_cublas_kernel.cu',
                       'pytorch_block_sparse/block_sparse_cutlass_kernel_back.cu',
                       'pytorch_block_sparse/block_sparse_cutlass_kernel.cu'],
-                      extra_compile_args=['-I', '%s/pytorch_block_sparse' % rootdir]
-                      ),
-        CUDAExtension('block_sparse_devtools',
-                      ['pytorch_block_sparse/block_sparse_devtools.cpp'],
                       extra_compile_args=['-I', '%s/pytorch_block_sparse' % rootdir]
                       ),
       ],

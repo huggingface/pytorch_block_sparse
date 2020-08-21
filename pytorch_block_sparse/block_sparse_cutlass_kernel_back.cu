@@ -14,27 +14,16 @@
 // CUBLAS GEMM API
 #include <cublas_v2.h>
 
-// Set Cutlass debug macro to enable console printing of library errors
-#define DEBUG
-
 // Cutlass GEMM API
 #include <cutlass/util/util.h>
 #include <cutlass/gemm/dispatch_back.h>
 #include <cutlass/gemm/epilogue_function.h>
-
-// Test utilities
-#include "util/command_line.h"
-#include "util/matrix.h"
-#include "util/timer.h"
-#include "util/type_conversion.h"
-
 
 // Dispatch routines to CUTLASS
 #include "cutlass_dispatch_back.h"
 
 using namespace std;
 using namespace cutlass;
-
 
 extern cublasHandle_t g_cublas_handle;
 extern bool cublas_inited;
@@ -63,10 +52,6 @@ bool test_bsc_back(
 {
 
     typedef gemm::gemm_policy<value_t, accum_t, TransformA, TransformB, TilingStrategy> block_task_back_policy_t;
-
-    // matrix pruning
-    int BlockItemsN = block_task_back_policy_t::BlockItemsX; // depend on the block task policy
-    int BlockItemsK = block_task_back_policy_t::BlockItemsK;
 
     cudaStream_t stream = 0;
 

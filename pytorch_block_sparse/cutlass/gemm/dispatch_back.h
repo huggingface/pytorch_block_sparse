@@ -379,6 +379,7 @@ launch_configuration_back dispatch_back(
     {
         // Compute tiling efficiency
         // tiling efficiency??
+#ifdef DEBUG
         float block_tiling_efficiency = float(block_task_back_policy_t::BlockItemsY * block_task_back_policy_t::BlockItemsX) /
             float(block_task_back_policy_t::BlockItemsY + block_task_back_policy_t::BlockItemsX);
 
@@ -397,6 +398,7 @@ launch_configuration_back dispatch_back(
             (long long) stream,
             max_sm_occupancy,
             k_split.split_k);
+#endif
     }
 
     // Construct parameter-pack

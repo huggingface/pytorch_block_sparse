@@ -157,6 +157,7 @@ struct gemm_policy<float, float, TransformA, TransformB, tiling_strategy::Custom
         grid_raster_sparse_strategy::Sparse>   // _RasterStrategy
 {};
 
+# if 0
 /**
  * GEMM task policy specialization for small sgemm
  */
@@ -259,7 +260,7 @@ struct gemm_policy<float, float, TransformA, TransformB, tiling_strategy::Huge> 
         false,  // _UseDoubleScratchTiles
         grid_raster_strategy::Default>   // _RasterStrategy
 {};
-
+#endif
 
 /******************************************************************************
  * DGEMM
@@ -282,6 +283,7 @@ struct gemm_policy<double, double, TransformA, TransformB, tiling_strategy::Cust
         grid_raster_strategy::Default>   // _RasterStrategy
 {};
 
+# if 0
 /**
  * GEMM task policy specialization for small dgemm
  */
@@ -385,6 +387,6 @@ struct gemm_policy<double, double, TransformA, TransformB, tiling_strategy::Huge
         grid_raster_strategy::Default>   // _RasterStrategy
 {};
 
-
+#endif
 } // namespace gemm
 } // namespace cutlass

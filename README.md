@@ -4,11 +4,11 @@ This PyTorch extension provides a **drop-in replacement** for torch.nn.Linear us
 This allows very easy experimentation, as you just have to replace the Linear layers in your model by a sparse one.
 
 ## Motivation
-The incentive to create this library is to let people test the idea that sparse matrices can be used in neural networks, instead of dense ones, without significantly altering the precision.  
+The incentive to create this library is to let people test the idea that **sparse matrices can be used in neural networks**, instead of dense ones, without significantly altering the precision.  
  
-This would be great news as sparse matrices allows savings in both space and compute: a 50% sparse matrix will use only 50% memory, and theoretically will use only 50% of computation.
+This would be great news as sparse matrices allows savings in both space and compute: a **50% sparse matrix** will use **only 50% memory**, and theoretically will use only 50% of computation.
 However, due to the very optimized nature of cuBLAS based PyTorch Linear, this lib is slower, by roughly a factor of 2 (this may be improved in the future).
-But the performance gain of using sparse matrices grows with the sparsity, so a 75% matrix is roughly 2x faster than the dense equivalent.
+But the performance gain of using sparse matrices grows with the sparsity, so a **75% sparse matrix** is roughly **2x** faster than the dense equivalent.
 
 This could prove useful, and could be combined with other methods like distillation and quantization to reduce further the networks.  
 

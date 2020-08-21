@@ -16,9 +16,7 @@ class TestFun(TestCase):
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
             block_count = int(total_block_count * density)
 
-        bsm = BlockSparseMatrix.zero((sizes[2], sizes[1]), block_count, blocks, block_size, device=device)
-        dbsm = bsm.to_dense()
-        bsm.check_with_dense(dbsm)
+        bsm = BlockSparseMatrix.zeros((sizes[2], sizes[1]), block_count, blocks, block_size, device=device)
 
         results = {}
 
@@ -33,7 +31,8 @@ class TestFun(TestCase):
                 if kind == "pytorch":
                     c = b.t().mm(a)
                 elif kind == "cutlass":
-                    c = bsm.matmul_with_output_sparse_support(b, a)
+                    bsm.matmul_with_output_sparse_support(b, a, overwrite_data = True)
+                    c = bsm
 
 
             end.record()

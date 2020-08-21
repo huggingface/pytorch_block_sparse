@@ -6,16 +6,23 @@ from pytorch_block_sparse.block_sparse_linear import BlockSparseLinear
 
 class TestFun(TestCase):
     def test0(self):
-        tests = [{"sizes": [32, 32, 32],
+        tests = [{"size_a": [32, 32],
+                  "size_b": [32, 32],
                   "density": 1.0
-                  }]
+                  },
+                 {"size_a": [256, 32],
+                  "size_b": [32, 32],
+                  "density": 1.0
+                  }
+                 ]
         verbose = False
         for test in tests:
             stride = 8
-            sizes = test["sizes"]
-            print(f"sizes={sizes}")
+            size_a = test["size_a"]
+            size_b = test["size_b"]
+            print(f"size_a={size_a}, size_b={size_b}")
             # Create the sparse linear layer
-            linear = BlockSparseLinear(sizes[1], sizes[2], False, test["density"])
+            linear = BlockSparseLinear(size_b[0], size_b[1], False, test["density"])
             if verbose:
                 print(linear.weight_data[::stride,::stride])
 
@@ -23,8 +30,8 @@ class TestFun(TestCase):
             linear.cuda()
 
             # Input vector
-            a1 = torch.nn.Parameter(torch.ones([sizes[0], sizes[1]]).cuda())
-            a2 = torch.nn.Parameter(torch.ones([sizes[0], sizes[1]]).cuda())
+            a1 = torch.nn.Parameter(torch.ones([size_a[0], size_a[1]]).cuda())
+            a2 = torch.nn.Parameter(torch.ones([size_a[0], size_a[1]]).cuda())
 
             # Build a dense equivalent to the sparse
             dense = torch.nn.Parameter(linear.weight.to_dense())

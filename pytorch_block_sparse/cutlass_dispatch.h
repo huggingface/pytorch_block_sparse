@@ -156,7 +156,6 @@ struct cutlass_gemm_dispatch
 
     /// Dispatches a CUTLASS GEMM
     gemm::launch_configuration operator()(
-        cublasHandle_t  handle,                     ///< CUBLAS handle
         int             m,                          ///< Rows of GEMM problem
         int             n,                          ///< Columns of GEMM problem
         int             k,                          ///< Inner dimension of GEMM problem

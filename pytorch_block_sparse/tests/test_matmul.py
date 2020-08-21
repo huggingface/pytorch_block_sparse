@@ -45,7 +45,7 @@ class TestFun(TestCase):
                         print("c=", c, "\n")
 
                 elif kind == "cutlass":
-                    c = bsm.transposed_reverse_matmul(a, transpose)
+                    c = bsm.reverse_matmul(a, transpose)
                 elif kind == "cublas":
                     import block_sparse_native
                     prr = torch.zeros((sizes[2], sizes[0]), device=device)

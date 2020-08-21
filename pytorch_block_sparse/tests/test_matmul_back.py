@@ -132,7 +132,7 @@ class TestFun(TestCase):
                 raise Exception("Comparison failed", blocks)
 
 
-    def test0(self):
+    def tst0(self):
         size = 32
         sizes = [size * 2, size * 4, size * 8]
         block_size = (32, 32)
@@ -151,8 +151,8 @@ class TestFun(TestCase):
         density = 1.0
 
         block_size = (32, 32)
-        iterations = 2
-        inner_iterations = 4
+        iterations = 4
+        inner_iterations = 10
 
         results = self.helper(sizes, block_size, density, iterations, inner_iterations, block_count = None)
 

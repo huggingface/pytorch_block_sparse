@@ -64,6 +64,7 @@ struct tiling_strategy : printable_t
         Wide,
         Huge,
         Custom,
+        CustomLarge,
         CustomBack,
     };
 
@@ -92,6 +93,7 @@ struct tiling_strategy : printable_t
             case Wide:      return "wide";
             case Huge:      return "huge";
             case Custom:    return "Custom";
+            case CustomLarge:    return "CustomLarge";
             case CustomBack: return "CustomBack";
             case Unknown:
             default:        return "unknown";
@@ -122,6 +124,22 @@ struct gemm_policy;
 /******************************************************************************
  * SGEMM
  ******************************************************************************/
+/**
+ * GEMM task policy specialization for Custom sgemm
+ */
+template <
+    matrix_transform_t::kind_t TransformA,      ///< Transformation op for matrix A
+    matrix_transform_t::kind_t TransformB>      ///< Transformation op for matrix B
+struct gemm_policy<float, float, TransformA, TransformB, tiling_strategy::CustomLarge> :
+    block_task_policy<
+        256,     // _BlockItemsY
+        32,     // _BlockItemsX
+        32,      // _BlockItemsK
+        8,      // _ThreadItemsY
+        8,      // _ThreadItemsX
+        false,  // _UseDoubleScratchTiles
+        grid_raster_strategy::Default>   // _RasterStrategy
+{};
 
 /**
  * GEMM task policy specialization for Custom sgemm
@@ -140,6 +158,7 @@ struct gemm_policy<float, float, TransformA, TransformB, tiling_strategy::Custom
         grid_raster_strategy::Default>   // _RasterStrategy
 {};
 
+
 /**
  * GEMM task policy specialization for CustomBack sgemm
  */
@@ -150,7 +169,7 @@ struct gemm_policy<float, float, TransformA, TransformB, tiling_strategy::Custom
     block_task_back_policy<
         32,     // _BlockItemsY
         32,     // _BlockItemsX
-        32,      // _BlockItemsK
+        64,      // _BlockItemsK
         4,      // _ThreadItemsY
         4,      // _ThreadItemsX
         false,  // _UseDoubleScratchTiles

@@ -124,8 +124,6 @@ int blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
 {
     typedef float       value_t;
 	typedef float       accum_t;
-    static const matrix_transform_t::kind_t NonTranspose = matrix_transform_t::NonTranspose;
-    static const matrix_transform_t::kind_t Transpose = matrix_transform_t::Transpose;
 
     value_t* A_data = (value_t*)dense_a.data_ptr();
     value_t* B_data = (value_t*)dense_b.data_ptr();
@@ -134,6 +132,9 @@ int blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
     long C_blocks_length = sparse_blocks_length_c;
 
     back_t back_fun;
+
+    static const matrix_transform_t::kind_t NonTranspose = matrix_transform_t::NonTranspose;
+    static const matrix_transform_t::kind_t Transpose = matrix_transform_t::Transpose;
 
     if (pytorch_transposed_a) {
         if (pytorch_transposed_b) {

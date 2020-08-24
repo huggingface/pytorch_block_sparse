@@ -161,5 +161,5 @@ struct block_loader
 
 #include "block_loader_crosswise.h"
 #include "block_loader_congruous_dp1.h"
-#include "block_loader_crosswise_prune.h"
-#include "block_loader_congruous_dp1_prune.h"
+#include "block_loader_crosswise_prune_dense.h"
+#include "block_loader_congruous_dp1_prune_sparse.h"

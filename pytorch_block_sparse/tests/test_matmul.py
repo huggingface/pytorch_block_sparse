@@ -6,10 +6,15 @@ from pytorch_block_sparse.block_sparse import BlockSparseMatrix
 class TestFun(TestCase):
     def helper(self, sizes, block_size, block_count = None, density = None, blocks = None, iterations = 1, device = "cuda", transpose = True, verbose = False):
         device = device
-        if transpose:
-            a = torch.randn((sizes[0], sizes[1]), device=device)
+        if isinstance(sizes[0], tuple):
+            sizes_0 = sizes[0]
         else:
-            a = torch.randn((sizes[0], sizes[2]), device=device)
+            sizes_0 = (sizes[0],)
+
+        if transpose:
+            a = torch.randn(sizes_0 + (sizes[1],), device=device)
+        else:
+            a = torch.randn(sizes_0 + (sizes[2],), device=device)
 
         torch.set_printoptions(precision=10, edgeitems=100000, linewidth=10000)
         if verbose:
@@ -133,9 +138,16 @@ class TestFun(TestCase):
                   ]
                  }                 
                  ]
+        tests += [{"sizes": [(64, 32), 32, 64],
+                  "block_setups": [
+                      [(0,0)],
+                      [(1, 0)],
+                      [(0,0), (1,0)],
+                  ]
+                 }
+                 ]
         block_size = (32,32)
         device = "cuda"
-#        tests = tests[:1]
         for transpose in [True, False]:
             for test_info in tests:
                 sizes = test_info["sizes"]
@@ -145,11 +157,15 @@ class TestFun(TestCase):
 
     def test1(self):
         size = 512
-        sizes = [size * 16 * 8, size * 2, size * 4]
+        sizes = [(4 * size * 2, 16), size * 2, size * 4]
         #density = 0.42
         density = 1.0
 
-        flops = float(2 * sizes[0] * sizes[1] * sizes[2])
+        import functools
+        import operator
+        sizes_0 = functools.reduce(operator.mul, sizes[0], 1)
+        flops = float(2 * sizes_0 * sizes[1] * sizes[2])
+
 
         block_size = (32, 32)
         iterations = 10

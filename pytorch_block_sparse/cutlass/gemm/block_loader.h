@@ -52,8 +52,10 @@ struct load_algorithm
     {
         CongruousCopy  = 0,
         CrosswiseCopy  = 1,
-        CongruousCopyPrune = 2,
-        CrosswiseCopyPrune = 3,
+        CrosswiseCopyPruneDense = 2,
+        CongruousCopyPruneSparse = 3,
+        CongruousCopyPruneDense = 4,
+        CrosswiseCopyPruneSparse = 5,
     };
 
     /**

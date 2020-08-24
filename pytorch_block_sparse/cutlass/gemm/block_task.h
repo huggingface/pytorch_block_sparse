@@ -241,9 +241,7 @@ struct block_task
             LdgAlignA,                                          // MatrixAlignBytes
             AllowRaggedTiles,                                   // AllowRaggedTiles
             dp_vector_t,                                        // dp_vector_t
-            (TransformA == matrix_transform_t::Transpose) ?  // LoadAlgorithm
-                load_algorithm::CrosswiseCopyPrune :
-                load_algorithm::CrosswiseCopy>
+            load_algorithm::CrosswiseCopyPruneDense>
         block_loader_a_t;
 
 
@@ -256,9 +254,7 @@ struct block_task
             LdgAlignB,                                          // MatrixAlignBytes
             AllowRaggedTiles,                                   // AllowRaggedTiles
             dp_vector_t,                                        // dp_vector_t
-            (TransformB == matrix_transform_t::Transpose) ?  // LoadAlgorithm
-                load_algorithm::CongruousCopyPrune :
-                load_algorithm::CongruousCopy>
+            load_algorithm::CongruousCopyPruneSparse>
         block_loader_b_t;
 
 

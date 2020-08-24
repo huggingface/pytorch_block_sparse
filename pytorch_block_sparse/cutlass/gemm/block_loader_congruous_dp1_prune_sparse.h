@@ -86,7 +86,7 @@ struct block_loader<
     LeadingDimAlignBytes,
     AllowRaggedTiles,
     value_t,                        ///< Dot-product vector type along the K-axis (dp1 specialization)
-    load_algorithm::CongruousCopyPrune>  ///< Algorithm for loading a shared tile of KxL matrix data (CongruousCopy specialization)
+    load_algorithm::CongruousCopyPruneSparse>  ///< Algorithm for loading a shared tile of KxL matrix data (CongruousCopy specialization)
 {
     //-------------------------------------------------------------------------
     // Constants and types

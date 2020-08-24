@@ -2,7 +2,6 @@ import torch
 import numpy
 import warnings
 
-
 class BlockSparseMatrix:
     # cols is a list of nonzero block column indexes (int32)
     # row_start is a index into cols (int32)
@@ -211,36 +210,28 @@ class BlockSparseMatrix:
 
         return
 
-    def matmul_cuda(self, dense_a):
-        """Compute a.matmul(self.t()) """
-        import block_sparse_native
-        shape_a = dense_a.shape
-        shape_b = self.shape[1], self.shape[0]
+    # Prepare the data itself. This function does not deal at all with true matrix dimensions, you have to check them
+    # independently.
+    def tensor_prepare(self, t, message, transpose):
+        """Return prepared tensor, should we transpose it in CUDA kernel"""
+        ret = None
+        if t.is_contiguous():
+            ret = [t, True]
+        if t.t().is_contiguous():
+            ret = [t, False]
 
-        if shape_a[1] != shape_b[0]:
-            raise Exception("Invalid matrices sizes (%d, %d) x (%d, %d)" % (shape_a[0], shape_a[1], shape_b[0], shape_b[1]))
+        if ret != None:
+            if transpose:
+                ret[1] = not ret[1]
+            return ret
 
-        out = torch.zeros((shape_a[0], shape_b[1]), device = dense_a.device)
+        warnings.warn(message)
+        return t.contiguous(), False
 
-        cols_a = self.cols_a[:,0].contiguous()
-
-        assert(dense_a.is_contiguous())
-        assert (self.row_start_ends_a.is_contiguous())
-        assert(cols_a.is_contiguous())
-        assert(self.data.is_contiguous())
-        assert(out.is_contiguous())
-
-        out2 = block_sparse_native.blocksparse_matmul_transpose_cuda(dense_a,
-                                                                     self.row_start_ends_a, cols_a, self.data,
-                                                                     *self.shape, *self.block_shape,
-                                                                     out)
-
-        return out2
-
-    def reverse_matmul(self, dense_a, transpose = True):
+    def reverse_matmul_(self, dense_a, transpose = True):
         """Compute a.matmul(self.t()) if transposed, else a.matmul(self)"""
         import block_sparse_native
-        shape_a = dense_a.shape
+        shape_a = list(dense_a.shape)
         shape_b = [self.shape[0], self.shape[1]]
         block_shape = list(self.block_shape)
 
@@ -272,68 +263,64 @@ class BlockSparseMatrix:
 
         assert(ptr_b.shape[0] == self.blocks_count()[dim] + 1)
 
-        verbose = False
-        verbose_stride = 8
 
         if transpose:
             data_b = self.data
         else:
             # TEMPORARY : move this to kernel
             data = self.data.view(-1, *block_shape)
-            if verbose:
-                print("data #0", data.shape, data[:,::verbose_stride,::verbose_stride])
             data = data.transpose(1,2)
-            if verbose:
-                print("data #1", data.shape, data[:,::verbose_stride, ::verbose_stride])
             data_b = data.reshape(-1, block_shape[1]).contiguous()
-            if verbose:
-                print("data #2", data.shape, data[::verbose_stride,::verbose_stride])
-            
-        #print(ptr, indices, data, dense_a)
-
-        #print(f"ptr={ptr}")
-        #print(f"indices={indices}")
-        #print(f"data={data}")
-        #print(f"dense_a={dense_a}")
-        if verbose:
-            print("dense_a\n", dense_a[::verbose_stride,::verbose_stride])
-            print("ptr", ptr_b)
-            print("indices", indices_b)
-            print("transpose", indices_b)
 
         if not dense_a.is_contiguous():
-            warnings.warn("pytorch_block_sparse.BlockSparseMatrix.transposed_reverse_matmul WARNING: DEGRADED performance, dense_a is not contiguous")
-            print(dense_a.stride())
+            warnings.warn("pytorch_block_sparse.BlockSparseMatrix.transposed_reverse_matmul: DEGRADED performance, dense_a is not contiguous")
 
         dense_a = dense_a.contiguous()
 
         block_sparse_native.blocksparse_matmul_cutlass(dense_a,
+                                                       True,
                                                        ptr_b, indices_b,
                                                        data_b,
                                                        dense_a.shape[0], shape_b[1], shape_b[0],
                                                        block_shape[1], block_shape[0],
                                                        out)
-        if verbose:
-            print("out\n", out.shape, out[::verbose_stride, ::verbose_stride])
         return out.t()
 
-    def tensor_prepare(self, t, message):
-        """Return prepared tensor, should we transpose it in CUDA kernel"""
-        if t.is_contiguous():
-            return t, False
-        if t.t().is_contiguous():
-            return t, True
-        warnings.warn(message)
-        return t.contiguous(), False
+    def flatten_first_dims(self, dense_a):
+        if dense_a.dim() < 2:
+            raise Exception(f"Invalid dimensions for dense_a {dense_a.shape} : dense_a should have at least 2 dimensions.")
+        rewritten_a = dense_a
+        if dense_a.dim() > 2:
+            if dense_a.is_contiguous():
+                rewritten_a = dense_a.view(-1, dense_a.shape[-1])
+            else:
+                warnings.warn("pytorch_block_sparse.BlockSparseMatrix.flatten_first_dims: DEGRADED performance (reshape instead of view)")
+                rewritten_a = dense_a.reshape(-1, dense_a.shape[-1])
 
 
-    def matmul_with_output_sparse_support(self, dense_a, dense_b, overwrite_data = False):
+        return rewritten_a, dense_a.shape[:-1]
+
+    def unflatten_first_dims(self, result, info):
+        shape_start = info
+        if len(shape_start) > 1:
+            result = result.view(*shape_start, result.shape[-1])
+        return result
+
+    def reverse_matmul(self, dense_a, transpose):
+        rewritten_a, info_a = self.flatten_first_dims(dense_a)
+        ret = self.reverse_matmul_(rewritten_a, transpose = transpose)
+
+        ret = self.unflatten_first_dims(ret, info_a)
+        return ret
+
+    def matmul_with_output_sparse_support_(self, dense_a, dense_b, overwrite_data = False):
         """Compute  c = a.t().mm(b) where c is sparse (we just keep the results where c is non_zero)."""
         import block_sparse_native
         shape_a = dense_a.shape
         shape_b = dense_b.shape
         shape_c = self.shape
 
+        # Check that sizes are compatible for a.t().mm(b)
         assert(shape_a[0] == shape_b[0])
         assert(shape_c[0] == shape_a[1])
         assert(shape_c[1] == shape_b[1])
@@ -345,10 +332,12 @@ class BlockSparseMatrix:
         else:
             data = torch.zeros_like(self.data)
 
-        message = "pytorch_block_sparse.BlockSparseMatrix.matmul_with_output_sparse_support WARNING: DEGRADED performance, dense_%s is not contiguous"
-        prepared_a, transpose_a = self.tensor_prepare(dense_a, message % "a")
-        prepared_b, transpose_b = self.tensor_prepare(dense_b, message % "b")
+        message = "pytorch_block_sparse.BlockSparseMatrix.matmul_with_output_sparse_support: DEGRADED performance, dense_%s is not contiguous"
+        prepared_a, transpose_a = self.tensor_prepare(dense_a, message % "a", True)
+        prepared_b, transpose_b = self.tensor_prepare(dense_b, message % "b", False)
 
+        # We interpret a as transposed, so we pass shape_a[1], shape_a[0] as a shape,
+        # and transpose_a will be set correcly too (for a "normal" contiguous pytorch matrix a, transpose_a will be true)
         block_sparse_native.blocksparse_matmul_back_cutlass(prepared_a, transpose_a, prepared_b, transpose_b,
                                                             shape_a[1], shape_b[1], shape_a[0],
                                                             self.block_shape[0], self.block_shape[1],
@@ -357,3 +346,10 @@ class BlockSparseMatrix:
 
         return data
 
+    def matmul_with_output_sparse_support(self, dense_a, dense_b, overwrite_data = False):
+        rewritten_a, info_a = self.flatten_first_dims(dense_a)
+        rewritten_b, info_b = self.flatten_first_dims(dense_b)
+        assert(info_a == info_b)
+        ret = self.matmul_with_output_sparse_support_(rewritten_a, rewritten_b, overwrite_data)
+
+        return ret

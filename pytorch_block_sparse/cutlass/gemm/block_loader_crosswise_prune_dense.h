@@ -89,7 +89,7 @@ struct block_loader<
     LeadingDimAlignBytes,
     AllowRaggedTiles,
     dp_vector_t,
-    load_algorithm::CrosswiseCopyPrune>  ///< Algorithm for loading a shared tile of KxL matrix data (CrosswiseCopy specialization)
+    load_algorithm::CrosswiseCopyPruneDense>  ///< Algorithm for loading a shared tile of KxL matrix data (CrosswiseCopy specialization)
 {
     //-------------------------------------------------------------------------
     // Constants and types

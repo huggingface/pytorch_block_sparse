@@ -109,10 +109,16 @@ typedef cudaError_t (*back_t)(float* A_data,
 							  int n,
 							  int k);
 
+/**
+ * matrix a must be of dimensions [m,k]
+ * matrix b must be of dimensions [k,n]
+ * if pytorch_contiguous_a is true, then dense_a must be contiguous, ortherwise  dense_a.t() must be contiguous.
+ * if pytorch_contiguous_b is true, then dense_b must be contiguous, ortherwise  dense_b.t() must be contiguous.
+ **/
 int blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
-                                    bool pytorch_transposed_a,
+                                    bool pytorch_contiguous_a,
 									torch::Tensor dense_b,
-                                    bool pytorch_transposed_b,
+                                    bool pytorch_contiguous_b,
 									int m,
 									int n,
 									int k,
@@ -136,17 +142,17 @@ int blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
     static const matrix_transform_t::kind_t NonTranspose = matrix_transform_t::NonTranspose;
     static const matrix_transform_t::kind_t Transpose = matrix_transform_t::Transpose;
 
-    if (pytorch_transposed_a) {
-        if (pytorch_transposed_b) {
-             back_fun = back<NonTranspose, NonTranspose, value_t, accum_t>;
+    if (pytorch_contiguous_a) {
+        if (pytorch_contiguous_b) {
+             back_fun = back<Transpose, Transpose, value_t, accum_t>;
         } else {
-             back_fun = back<NonTranspose, Transpose, value_t, accum_t>;
+             back_fun = back<Transpose, NonTranspose, value_t, accum_t>;
         }
     } else {
-        if (pytorch_transposed_b) {
-            back_fun = back<Transpose, NonTranspose, value_t, accum_t>;
+        if (pytorch_contiguous_b) {
+            back_fun = back<NonTranspose, Transpose, value_t, accum_t>;
         } else {
-            back_fun = back<Transpose, Transpose, value_t, accum_t>;
+            back_fun = back<NonTranspose, NonTranspose, value_t, accum_t>;
         }
     }
 

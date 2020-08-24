@@ -111,7 +111,7 @@ typedef cudaError_t (*forward_t)(float* A_data,
 								int k);
 
 int blocksparse_matmul_cutlass(torch::Tensor dense_a,
-                               bool pytorch_transposed_a,
+                               bool pytorch_contiguous_a,
   							   torch::Tensor ptr_b,
 							   torch::Tensor indices_b,
 							   torch::Tensor data_b,
@@ -138,8 +138,8 @@ int blocksparse_matmul_cutlass(torch::Tensor dense_a,
 
     forward_t forward_fun;
 
-    assert(!pytorch_transposed_a);
-	//if (pytorch_transposed_a) {
+    assert(pytorch_contiguous_a);
+	//if (pytorch_contiguous_a) {
     //      forward_fun = forward<NonTranspose, TransformB, value_t, accum_t>;
     //} else {
         forward_fun = forward<Transpose, TransformB, value_t, accum_t>;

@@ -9,20 +9,20 @@ class TestFun(TestCase):
     def helper_(self, sizes, block_size, block_count = None, blocks = None, density = None, iterations = 1,
                 non_contiguous_a = False, non_contiguous_b = False):
         device = "cuda"
-        a = torch.randn((sizes[0], sizes[1]), device=device)
-        b = torch.randn((sizes[0], sizes[2]), device=device)
+
+        if isinstance(sizes[0], tuple):
+            sizes_0 = sizes[0]
+        else:
+            sizes_0 = (sizes[0],)
+
+        a = torch.randn(sizes_0 + (sizes[1],), device=device)
+        b = torch.randn(sizes_0 + (sizes[2],), device=device)
 
         if non_contiguous_a:
-            print("NON CONTIGUOUS A")
-            a = a.t().contiguous().t()
-        else:
-            print("CONTIGUOUS A")
+            a = a.transpose(-2, -1).contiguous().transpose(-2, -1)
 
         if non_contiguous_b:
-            print("NON CONTIGUOUS B")
-            b = b.t().contiguous().t()
-        else:
-            print("CONTIGUOUS B")
+            b = b.transpose(-2, -1).contiguous().transpose(-2, -1)
 
         if block_count == None and blocks == None:
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
@@ -41,7 +41,10 @@ class TestFun(TestCase):
             start.record()
             for i in range(iterations):
                 if kind == "pytorch":
-                    c = b.t().mm(a)
+                    aa = a.reshape(-1, a.shape[-1])
+                    bb = b.reshape(-1, b.shape[-1])
+                    bb = bb.t()
+                    c = bb.mm(aa)
                 elif kind == "cutlass":
                     bsm.matmul_with_output_sparse_support(b, a, overwrite_data = True)
                     c = bsm
@@ -86,7 +89,16 @@ class TestFun(TestCase):
 
     def helper(self, sizes, block_size, density, iterations, inner_iterations, block_count = None, blocks = None,
                non_contiguous_a = False, non_contiguous_b = False):
-        flops = float(2 * sizes[0] * sizes[1] * sizes[2])
+
+        import functools
+        import operator
+
+        if isinstance(sizes[0], int):
+            sizes_0 = sizes[0]
+        else:
+            sizes_0 = functools.reduce(operator.mul, sizes[0], 1)
+
+        flops = float(2 * sizes_0 * sizes[1] * sizes[2])
 
         report = {}
         for i in range(iterations):
@@ -124,7 +136,7 @@ class TestFun(TestCase):
             #print(cutlass_result)
 
             stride = 4
-            print("cutlass block[0][0]", cutlass_result.data[::stride, ::stride])
+            print("cutlass block[0][0]", cutlass_result.data[::stride, ::stride].t())
             print("pytorch blocks[0][0]", pytorch_result[::stride, ::stride])
         for i in range(cutlass_result.blocks.shape[0] // 2):
             #print("i=", i)
@@ -146,9 +158,10 @@ class TestFun(TestCase):
                 raise Exception("Comparison failed", blocks)
 
 
-    def test0(self):
+    def tst0(self):
         size = 32
         sizes = [size * 2, size * 4, size * 8]
+        #sizes = [size, size, size]
         block_size = (32, 32)
 
         block_tests = [[(0, 0)],[(0,1)], [(1,0)], [(1,0), (0,2)], [(1,0), (2,0), (3,0)]]
@@ -157,12 +170,12 @@ class TestFun(TestCase):
                 for non_contiguous_b in [False, True]:
                     results = self.helper(sizes, block_size, density = None, blocks = blocks, iterations = 1, inner_iterations = 1,
                                           non_contiguous_a = non_contiguous_a, non_contiguous_b = non_contiguous_b)
-                    self.check(results, block_size, blocks, verbose = False)
+                    self.check(results, block_size, blocks, verbose = True)
             #break
 
     def test1(self):
         size = 512
-        sizes = [size * 16 * 8, size * 2, size * 4]
+        sizes = [(size * 16,  8), size * 2, size * 4]
 
         density = 0.47
         density = 1.0
@@ -177,7 +190,6 @@ class TestFun(TestCase):
                                       non_contiguous_a=non_contiguous_a, non_contiguous_b=non_contiguous_b)
 
                 self.check(results, block_size, results["cutlass"]["output"].blocks)
-
 
 
 if __name__ == '__main__':

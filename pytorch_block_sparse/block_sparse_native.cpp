@@ -4,6 +4,7 @@
 
 
 int blocksparse_matmul_cutlass(torch::Tensor dense_a,
+                               bool pytorch_contiguous_a,
   							   torch::Tensor ptr_b,
 							   torch::Tensor indices_b,
 							   torch::Tensor data_b,
@@ -15,9 +16,9 @@ int blocksparse_matmul_cutlass(torch::Tensor dense_a,
 							   torch::Tensor dense_out);
 
 int blocksparse_matmul_back_cutlass(torch::Tensor dense_a,
-                                    bool pytorch_transposed_a,
+                                    bool pytorch_contiguous_a,
 									torch::Tensor dense_b,
-                                    bool pytorch_transposed_b,
+                                    bool pytorch_contiguous_b,
 									int m,
 									int n,
 									int k,

@@ -23,7 +23,7 @@ class BlockSparseLinearFunction(torch.autograd.Function):
         input, = ctx.saved_tensors
         weight = ctx.weight
         assert (isinstance(weight, BlockSparseMatrix))
-        if False:
+        if verbose:
             dense_weight = weight.to_dense()
             stride = 8
             print("input\n", input[::stride, ::stride])
@@ -34,7 +34,7 @@ class BlockSparseLinearFunction(torch.autograd.Function):
         if ctx.needs_input_grad[0]:
             grad_input1 = weight.reverse_matmul(grad_output, transpose=False)
 
-            if False:
+            if verbose:
                 grad_input0 = grad_output.mm(dense_weight)
                 grad_input2 = weight.reverse_matmul(torch.ones_like(grad_output), transpose=False)
 
@@ -44,7 +44,7 @@ class BlockSparseLinearFunction(torch.autograd.Function):
 
         if ctx.needs_input_grad[1]:
             grad_weight1 = weight.matmul_with_output_sparse_support(grad_output, input)
-            if False:
+            if verbose:
                 grad_weight0 = grad_output.t().mm(input)
                 print("grad_weight0\n", grad_weight0[::stride, ::stride])
                 print("grad_weight1\n", grad_weight1[::stride, ::stride])

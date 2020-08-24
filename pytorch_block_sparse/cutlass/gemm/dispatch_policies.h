@@ -169,7 +169,7 @@ struct gemm_policy<float, float, TransformA, TransformB, tiling_strategy::Custom
     block_task_back_policy<
         32,     // _BlockItemsY
         32,     // _BlockItemsX
-        64,      // _BlockItemsK
+        32,      // _BlockItemsK
         4,      // _ThreadItemsY
         4,      // _ThreadItemsX
         false,  // _UseDoubleScratchTiles

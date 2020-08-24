@@ -12,7 +12,7 @@ class BlockSparseLinearFunction(torch.autograd.Function):
         assert(isinstance(weight, BlockSparseMatrix))
         ctx.save_for_backward(input)
         ctx.weight = weight
-        output = weight.transposed_reverse_matmul(input, transpose = True)
+        output = weight.reverse_matmul(input, transpose = True)
         return output
 
     @staticmethod
@@ -32,11 +32,11 @@ class BlockSparseLinearFunction(torch.autograd.Function):
             print("weight\n", weight.data[::stride, ::stride])
 
         if ctx.needs_input_grad[0]:
-            grad_input1 = weight.transposed_reverse_matmul(grad_output, transpose=False)
+            grad_input1 = weight.reverse_matmul(grad_output, transpose=False)
 
             if False:
                 grad_input0 = grad_output.mm(dense_weight)
-                grad_input2 = weight.transposed_reverse_matmul(torch.ones_like(grad_output), transpose=False)
+                grad_input2 = weight.reverse_matmul(torch.ones_like(grad_output), transpose=False)
 
                 print("grad_input0\n", grad_input0[::stride,::stride])
                 print("grad_input1\n", grad_input1[::stride, ::stride])

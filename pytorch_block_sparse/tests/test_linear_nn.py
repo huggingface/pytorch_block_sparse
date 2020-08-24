@@ -61,7 +61,7 @@ class TestFun(TestCase):
             if not s:
                 raise Exception("Input gradients are differents")
 
-            a_grad = linear.weight.transposed_reverse_matmul(torch.ones_like(a1), transpose=False)
+            a_grad = linear.weight.reverse_matmul(torch.ones_like(a1), transpose=False)
 
             s = a_grad.isclose(a2.grad, atol=1e-05).all()
             if not s:
@@ -80,6 +80,7 @@ class TestFun(TestCase):
             dense_grad_reference = dense.grad * dense_mask
 
             if verbose:
+                print("dense_grad\n", dense_grad[::stride,::stride])
                 print("dense_grad_reference\n", dense_grad_reference[::stride,::stride])
 
             s = dense_grad.isclose(dense_grad_reference, atol=1e-05).all()

@@ -96,7 +96,7 @@ class TestFun(TestCase):
         return timings
 
 
-    def tst0(self):
+    def test0(self):
         tests = [{"sizes":[32, 32, 32],
                   "block_setups":[
                     [(0,0)],

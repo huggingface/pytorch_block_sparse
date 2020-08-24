@@ -6,11 +6,23 @@ from torch.autograd import gradcheck
 
 
 class TestFun(TestCase):
-    def helper_(self, sizes, block_size, block_count = None, blocks = None, density = None, iterations = 1):
+    def helper_(self, sizes, block_size, block_count = None, blocks = None, density = None, iterations = 1,
+                non_contiguous_a = False, non_contiguous_b = False):
         device = "cuda"
         a = torch.randn((sizes[0], sizes[1]), device=device)
         b = torch.randn((sizes[0], sizes[2]), device=device)
 
+        if non_contiguous_a:
+            print("NON CONTIGUOUS A")
+            a = a.t().contiguous().t()
+        else:
+            print("CONTIGUOUS A")
+
+        if non_contiguous_b:
+            print("NON CONTIGUOUS B")
+            b = b.t().contiguous().t()
+        else:
+            print("CONTIGUOUS B")
 
         if block_count == None and blocks == None:
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
@@ -72,12 +84,14 @@ class TestFun(TestCase):
 
         return results
 
-    def helper(self, sizes, block_size, density, iterations, inner_iterations, block_count = None, blocks = None):
+    def helper(self, sizes, block_size, density, iterations, inner_iterations, block_count = None, blocks = None,
+               non_contiguous_a = False, non_contiguous_b = False):
         flops = float(2 * sizes[0] * sizes[1] * sizes[2])
 
         report = {}
         for i in range(iterations):
-            results = self.helper_(sizes, block_size, block_count=block_count, blocks=blocks, density=density, iterations=inner_iterations)
+            results = self.helper_(sizes, block_size, block_count=block_count, blocks=blocks, density=density, iterations=inner_iterations,
+                                   non_contiguous_a = non_contiguous_a, non_contiguous_b = non_contiguous_b)
 
             if "pytorch" in results:
                 pytorch_time = results["pytorch"]["elapsed"]
@@ -132,15 +146,18 @@ class TestFun(TestCase):
                 raise Exception("Comparison failed", blocks)
 
 
-    def tst0(self):
+    def test0(self):
         size = 32
         sizes = [size * 2, size * 4, size * 8]
         block_size = (32, 32)
 
         block_tests = [[(0, 0)],[(0,1)], [(1,0)], [(1,0), (0,2)], [(1,0), (2,0), (3,0)]]
         for blocks in block_tests:
-            results = self.helper(sizes, block_size, density = None, blocks = blocks, iterations = 1, inner_iterations = 1)
-            self.check(results, block_size, blocks, verbose = False)
+            for non_contiguous_a in [False, True]:
+                for non_contiguous_b in [False, True]:
+                    results = self.helper(sizes, block_size, density = None, blocks = blocks, iterations = 1, inner_iterations = 1,
+                                          non_contiguous_a = non_contiguous_a, non_contiguous_b = non_contiguous_b)
+                    self.check(results, block_size, blocks, verbose = False)
             #break
 
     def test1(self):
@@ -154,9 +171,12 @@ class TestFun(TestCase):
         iterations = 4
         inner_iterations = 10
 
-        results = self.helper(sizes, block_size, density, iterations, inner_iterations, block_count = None)
+        for non_contiguous_a in [False, True]:
+            for non_contiguous_b in [False, True]:
+                results = self.helper(sizes, block_size, density, iterations, inner_iterations, block_count = None,
+                                      non_contiguous_a=non_contiguous_a, non_contiguous_b=non_contiguous_b)
 
-        self.check(results, block_size, results["cutlass"]["output"].blocks)
+                self.check(results, block_size, results["cutlass"]["output"].blocks)
 
 
 

@@ -317,6 +317,16 @@ class BlockSparseMatrix:
             print("out\n", out.shape, out[::verbose_stride, ::verbose_stride])
         return out.t()
 
+    def tensor_prepare(self, t, message):
+        """Return prepared tensor, should we transpose it in CUDA kernel"""
+        if t.is_contiguous():
+            return t, False
+        if t.t().is_contiguous():
+            return t, True
+        warnings.warn(message)
+        return t.contiguous(), False
+
+
     def matmul_with_output_sparse_support(self, dense_a, dense_b, overwrite_data = False):
         """Compute  c = a.t().mm(b) where c is sparse (we just keep the results where c is non_zero)."""
         import block_sparse_native
@@ -335,14 +345,11 @@ class BlockSparseMatrix:
         else:
             data = torch.zeros_like(self.data)
 
-        if not dense_a.is_contiguous():
-            warnings.warn("pytorch_block_sparse.BlockSparseMatrix.matmul_with_output_sparse_support WARNING: DEGRADED performance, dense_a is not contiguous")
-            dense_a = dense_a.contiguous()
-        if not dense_b.is_contiguous():
-            warnings.warn("pytorch_block_sparse.BlockSparseMatrix.matmul_with_output_sparse_support WARNING: DEGRADED performance, dense_b is not contiguous")
-            dense_b = dense_b.contiguous()
+        message = "pytorch_block_sparse.BlockSparseMatrix.matmul_with_output_sparse_support WARNING: DEGRADED performance, dense_%s is not contiguous"
+        prepared_a, transpose_a = self.tensor_prepare(dense_a, message % "a")
+        prepared_b, transpose_b = self.tensor_prepare(dense_b, message % "b")
 
-        block_sparse_native.blocksparse_matmul_back_cutlass(dense_a, dense_b,
+        block_sparse_native.blocksparse_matmul_back_cutlass(prepared_a, transpose_a, prepared_b, transpose_b,
                                                             shape_a[1], shape_b[1], shape_a[0],
                                                             self.block_shape[0], self.block_shape[1],
                                                             data,

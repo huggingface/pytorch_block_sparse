@@ -241,7 +241,9 @@ struct block_task_back
             LdgAlignA,                                          // MatrixAlignBytes
             AllowRaggedTiles,                                   // AllowRaggedTiles
             dp_vector_t,                                        // dp_vector_t
-            load_algorithm::CongruousCopy>                      // LoadAlgorithm
+            (TransformA == matrix_transform_t::NonTranspose) ?   // LoadAlgorithm
+                load_algorithm::CrosswiseCopy :
+                load_algorithm::CongruousCopy>
             block_loader_a_t;
 
 
@@ -254,7 +256,9 @@ struct block_task_back
             LdgAlignB,                                          // MatrixAlignBytes
             AllowRaggedTiles,                                   // AllowRaggedTiles
             dp_vector_t,                                        // dp_vector_t
-            load_algorithm::CongruousCopy>                      // LoadAlgorithm
+            (TransformB == matrix_transform_t::NonTranspose) ?   // LoadAlgorithm
+                load_algorithm::CrosswiseCopy :
+                load_algorithm::CongruousCopy>
             block_loader_b_t;
 
 
@@ -441,8 +445,8 @@ struct block_task_back
         loader_a(
             d_a,                                                            // d_matrix
             dim_m,                                                          // matrix_values_l
-            (TransformA == matrix_transform_t::NonTranspose) ? dim_m : 1,   // matrix_values_stride_k
-            (TransformA == matrix_transform_t::NonTranspose) ? 1 : dim_k,   // matrix_values_stride_l
+            (TransformA == matrix_transform_t::NonTranspose) ? 1 : dim_m,   // matrix_values_stride_k
+            (TransformA == matrix_transform_t::NonTranspose) ? dim_k : 1,   // matrix_values_stride_l
             make_int2(                                                      // block_begin_item_coords
                 grid_raster_sparse.block_item_coords_src.y,
                 block_item_coords_k),

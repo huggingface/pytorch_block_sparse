@@ -9,13 +9,13 @@ class ModelPatcher():
     def is_patchable(self, module_name, module, raiseError):
         return True
 
-    def get_names(self, model):
+    def get_patchable_layers(self, model):
         # Layer names (displayed as regexps)")
         ret = []
         for k, v in model.named_modules():
             if self.is_patchable(k, v, raiseError=False):
                 r = re.escape(k)
-                ret.append(r)
+                ret.append({"regexp":r, "layer":v})
         return ret
 
     def add_pattern(self, pattern, pattern_info):

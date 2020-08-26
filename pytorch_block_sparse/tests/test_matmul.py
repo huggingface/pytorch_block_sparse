@@ -16,7 +16,7 @@ class TestFun(TestCase):
         else:
             a = torch.randn(sizes_0 + (sizes[2],), device=device)
 
-        torch.set_printoptions(precision=10, edgeitems=100000, linewidth=10000)
+        #torch.set_printoptions(precision=10, edgeitems=100000, linewidth=10000)
         if verbose:
             print("a=", a, "\n")
 
@@ -73,30 +73,33 @@ class TestFun(TestCase):
                     t["comparison"] = True
                     continue
                 c = t["result"]
-                torch.set_printoptions(precision=8, edgeitems=100000, linewidth=10000)
-                stride = 8
-                c_ = c[::stride,::stride]
-                c0_ = c0[::stride,::stride]
+                #torch.set_printoptions(precision=8, edgeitems=100000, linewidth=10000)
+                stride = 32
+                shift = 0
+                c_ = c[shift::stride,shift::stride]
+                c0_ = c0[shift::stride,shift::stride]
                 if verbose:
                     print("c shape", c.shape)
-                    print(c_)
-                    print(c0_)
-                    print((c_ != 0).long())
-                    print((c0_ != 0).long())
-                    print("equals", ((c_ - c0_).abs() < 1e-03).long())
+                    print("c\n",c_)
+                    print("c0\n", c0_)
+                    print("c!=0\n", (c_ != 0).long())
+                    print("c0!=0\n", (c0_ != 0).long())
+                    print("equals\n", ((c_ - c0_).abs() < 1e-06).long())
+                    print("equals nonzero\n", ((c_ - c0_).abs() > 1e-06).nonzero())
 
-                s = c.isclose(c0, atol=1e-03).all()
+                s = c.isclose(c0, atol=1e-05).all()
                 if not s.item():
                     print("max difference %s=" % t["kind"], (c - c0).abs().max())
                     t["comparison"] = False
-                    raise Exception("Comparison NOK : transposed_matmul issue for ", k)
+                    raise Exception("Comparison NOK : reversed_matmul issue for ", k)
                 else:
-                    print("Comparison OK for transposed_matmul for ", k)
-                    print("max difference %s=" % t["kind"], (c - c0).abs().max())
+                    if verbose:
+                        print("Comparison OK for reversed_matmul for ", k)
+                        print("max difference %s=" % t["kind"], (c - c0).abs().max())
                     t["comparison"] = True
                 if verbose:
                     print("c_cutlass=", c)
-        torch.set_printoptions(profile="default")
+        #torch.set_printoptions(profile="default")
 
         return timings
 
@@ -146,9 +149,29 @@ class TestFun(TestCase):
                   ]
                  }
                  ]
+        tests += [{"sizes": [(64, 128, 32), 128, 256],
+                  "block_setups": [
+                      [(0,0)],
+                      [(1, 0)],
+                      [(0,0), (1,0)],
+                  ]
+                 }
+                 ]
+        tests += [{"sizes": [32, 64, 64],
+                   "block_setups": [
+                       [(0, 0), (1,0), (0, 1)],
+                   ]
+                   }
+                  ]
+        tests += [{"sizes": [32, 64, 128],
+                   "block_setups": [
+                       [(0, 0), (1,0), (0,1), (2,0)],
+                   ]
+                   }
+                  ]
         block_size = (32,32)
         device = "cuda"
-        for transpose in [True, False]:
+        for transpose in [False, True]:
             for test_info in tests:
                 sizes = test_info["sizes"]
                 for blocks in test_info["block_setups"]:
@@ -158,22 +181,28 @@ class TestFun(TestCase):
     def test1(self):
         size = 512
         sizes = [(4 * size * 2, 16), size * 2, size * 4]
+        #sizes = [(4 * 2, 16), size * 2, size * 4]
+        #size = 32
+        #sizes = [32, size * 2, size * 2]
+
         #density = 0.42
         density = 1.0
 
         import functools
         import operator
-        sizes_0 = functools.reduce(operator.mul, sizes[0], 1)
+        if isinstance(sizes[0], int):
+            sizes_0 = sizes[0]
+        else:
+            sizes_0 = functools.reduce(operator.mul, sizes[0], 1)
         flops = float(2 * sizes_0 * sizes[1] * sizes[2])
 
-
         block_size = (32, 32)
-        iterations = 10
+        iterations = 1
 
         results = {}
         for transpose in [False, True]:
-            for i in range(3):
-                timings = self.helper(sizes, block_size, density = density, iterations = iterations, transpose = True)
+            for i in range(1):
+                timings = self.helper(sizes, block_size, density = density, iterations = iterations, verbose=False, transpose = transpose)
 
                 if "pytorch" in timings:
                     pytorch_time = timings["pytorch"]["elapsed"]

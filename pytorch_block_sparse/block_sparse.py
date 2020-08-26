@@ -47,26 +47,33 @@ class BlockSparseMatrix:
         for a in ["block_mask", "data", "cols_a", "row_start_ends_a", "rows_b", "col_start_ends_b"]:
             getattr(self, a).to(device)
 
-    def build_indices_(self, nnz,  transpose_indices):
-        nnz = nnz.transpose(0,1)
-
+    def build_indices_(self, nnzt, transpose_indices):
         X, Y = self.blocks_count_(self.shape, self.block_shape)
 
-        rows = nnz[0]
-        cols = nnz[1]
+        rows = nnzt[0]
+        cols = nnzt[1]
 
         block_shuffle = torch.arange(0, cols.shape[0], device = self.device)
 
         if transpose_indices:
             block_indices = torch.zeros(X*Y, dtype=torch.long, device = self.device)
             positions = rows * Y + cols
+            # Set the index of used blocks at the used blocks positions : rest will stay zero
+            # Add 1 temporarily to use 0 as a special value
             block_indices[positions] = block_shuffle + 1
+            # Reorganize the indexes with transposed ordering
             block_indices = block_indices.reshape(X, Y).t().reshape(X * Y)
+            # Only keeps the non zero, and substract 1 to find back the right block index
             block_shuffle = block_indices[block_indices.nonzero()] - 1
+            # Remove spurious dimension
             block_shuffle = block_shuffle.squeeze(-1)
 
             X, Y = Y, X
-            rows, cols = cols, rows
+
+            rows = cols
+
+            nnztt = self.block_mask.t().nonzero()
+            cols = nnztt[:,1]
 
         row_start_ends = torch.zeros((X + 1,), dtype=torch.long, device = self.device)
 
@@ -80,12 +87,20 @@ class BlockSparseMatrix:
     def build_indices(self):
         nnz = self.block_mask.nonzero()
         self.blocks = nnz.flip(-1).flatten().to(dtype=torch.int32)
-        self.cols_a, self.row_start_ends_a = self.build_indices_(nnz, False)
-        self.rows_b, self.col_start_ends_b  = self.build_indices_(nnz, True)
+
+        nnzt = nnz.transpose(0, 1)
+        self.cols_a, self.row_start_ends_a = self.build_indices_(nnzt, False)
+        self.rows_b, self.col_start_ends_b  = self.build_indices_(nnzt, True)
+
+        verbose = False
+
+        if verbose:
+            print(f"row_start_ends_a=\n {self.row_start_ends_a}\ncols_a=\n {self.cols_a}\n")
+            print(f"col_start_ends_b=\n {self.col_start_ends_b}\nrows_b=\n {self.rows_b}\n")
 
     @classmethod
     def zeros(cls, shape, n_blocks = None, blocks = None, block_shape=(32, 32), device = "cuda"):
-        assert(device.startswith("cuda"))
+        assert(str(device).startswith("cuda"))
         for i in range(2):
             if shape[i] % block_shape[i] != 0:
                 raise Exception(f"Invalid shape: shape[{i}]({shape[i]}) %% block_shape[{i}]({block_shape[i]}) is not 0.")
@@ -122,6 +137,26 @@ class BlockSparseMatrix:
     def randn(cls, shape, n_blocks, blocks = None, block_shape=(32, 32), device = "cuda"):
         ret = cls.zeros(shape, n_blocks, blocks, block_shape, device)
         torch.randn(ret.data.shape, out=ret.data)
+        return ret
+
+    @classmethod
+    def from_dense(cls, dense, block_shape = (32, 32), density=0.5):
+        n_blocks = int(density * (dense.shape[0] * dense.shape[1] / (block_shape[0]  * block_shape[1])))
+        assert (density > 0.0)
+        ret = cls.zeros(dense.shape, n_blocks = n_blocks, block_shape = block_shape, device = dense.device)
+
+        if density == 1:
+            # TODO : use some pytorch dimensions transposition to speed up this block by block copy
+            coo = ret.build_coo_block_index().long()
+
+            for i in range(coo.shape[1]):
+                r, c = coo[0][i], coo[1][i]
+                bs = ret.block_shape
+                ret.data[i * bs[0]:(i + 1) * bs[0], :] = dense[r * bs[0]:(r + 1) * bs[0], c * bs[1]:(c + 1) * bs[1]].t()
+        else:
+            param_count = dense.shape[0] * dense.shape[1]
+            ret.data = dense.flatten()[:param_count].reshape(ret.data.shape) / density
+
         return ret
 
     def __repr__(self):
@@ -203,12 +238,12 @@ class BlockSparseMatrix:
 
         for i in range(coo.shape[1]):
             r,c = coo[0][i], coo[1][i]
-            from_sparse = self.data[i * self.block_shape[0], 0]
-            from_dense = dense_version[r * self.block_shape[0], c * self.block_shape[1]]
-            if from_sparse != from_dense:
+            bs = self.block_shape
+            from_sparse = self.data[i * bs[0]:(i +1)* bs[0],:].t()
+            from_dense = dense_version[r * bs[0]:(r+1)*bs[0], c * bs[1]:(c + 1)*bs[1]]
+            if not (from_sparse == from_dense).all():
+                print(f"r={r},c={c}\n", from_sparse[::8,::8], "\n", from_dense[::8,::8])
                 raise Exception("non matching data")
-
-        return
 
     # Prepare the data itself. This function does not deal at all with true matrix dimensions, you have to check them
     # independently.
@@ -231,6 +266,10 @@ class BlockSparseMatrix:
     def reverse_matmul_(self, dense_a, transpose = True):
         """Compute a.matmul(self.t()) if transposed, else a.matmul(self)"""
         import block_sparse_native
+
+        if dense_a.dim() > 2:
+            dense_a = dense_a.reshape(-1, dense_a.shape[-1])
+
         shape_a = list(dense_a.shape)
         shape_b = [self.shape[0], self.shape[1]]
         block_shape = list(self.block_shape)
@@ -253,6 +292,8 @@ class BlockSparseMatrix:
             indices_b = self.rows_b
             dim = 1
 
+        assert((shape_a[0] % block_shape[0]) == 0)
+        assert((shape_a[1] % block_shape[1]) == 0)
         assert(self.data.is_contiguous())
         assert(out.is_contiguous())
 
@@ -263,7 +304,6 @@ class BlockSparseMatrix:
 
         assert(ptr_b.shape[0] == self.blocks_count()[dim] + 1)
 
-
         if transpose:
             data_b = self.data
         else:
@@ -273,9 +313,13 @@ class BlockSparseMatrix:
             data_b = data.reshape(-1, block_shape[1]).contiguous()
 
         if not dense_a.is_contiguous():
-            warnings.warn("pytorch_block_sparse.BlockSparseMatrix.transposed_reverse_matmul: DEGRADED performance, dense_a is not contiguous")
+            warnings.warn(f"pytorch_block_sparse.BlockSparseMatrix.reverse_matmul: DEGRADED performance, dense_a is not contiguous {dense_a.stride()}")
+            dense_a = dense_a.contiguous()
 
-        dense_a = dense_a.contiguous()
+        verbose = False
+        if verbose:
+            print("reverse_matmul\ndense_a=\n", dense_a[::32,::32],"\nptr_b=\n", ptr_b, "\nindices_b=\n", indices_b, "\ndata_b=\n", data_b[::32,::32])
+            print("reverse_matmul_\n", dense_a.shape, data_b.shape)
 
         block_sparse_native.blocksparse_matmul_cutlass(dense_a,
                                                        True,
@@ -291,12 +335,7 @@ class BlockSparseMatrix:
             raise Exception(f"Invalid dimensions for dense_a {dense_a.shape} : dense_a should have at least 2 dimensions.")
         rewritten_a = dense_a
         if dense_a.dim() > 2:
-            if dense_a.is_contiguous():
-                rewritten_a = dense_a.view(-1, dense_a.shape[-1])
-            else:
-                warnings.warn("pytorch_block_sparse.BlockSparseMatrix.flatten_first_dims: DEGRADED performance (reshape instead of view)")
-                rewritten_a = dense_a.reshape(-1, dense_a.shape[-1])
-
+            rewritten_a = dense_a.reshape(-1, dense_a.shape[-1])
 
         return rewritten_a, dense_a.shape[:-1]
 
@@ -326,6 +365,12 @@ class BlockSparseMatrix:
         assert(shape_c[1] == shape_b[1])
 
         blocks_len = len(self.blocks) // 2
+        block_shape = self.block_shape
+
+        assert ((shape_a[0] % block_shape[0]) == 0)
+        assert ((shape_a[1] % block_shape[1]) == 0)
+        assert ((shape_b[0] % block_shape[0]) == 0)
+        assert ((shape_b[1] % block_shape[1]) == 0)
 
         if overwrite_data:
             data = self.data
@@ -353,3 +398,5 @@ class BlockSparseMatrix:
         ret = self.matmul_with_output_sparse_support_(rewritten_a, rewritten_b, overwrite_data)
 
         return ret
+
+

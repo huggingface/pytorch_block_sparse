@@ -154,7 +154,7 @@ class BlockSparseMatrix:
                 bs = ret.block_shape
                 ret.data[i * bs[0]:(i + 1) * bs[0], :] = dense[r * bs[0]:(r + 1) * bs[0], c * bs[1]:(c + 1) * bs[1]].t()
         else:
-            param_count = dense.shape[0] * dense.shape[1]
+            param_count = ret.data.numel()
             ret.data = dense.flatten()[:param_count].reshape(ret.data.shape) / density
 
         return ret

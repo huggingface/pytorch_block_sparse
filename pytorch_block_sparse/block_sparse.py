@@ -292,7 +292,6 @@ class BlockSparseMatrix:
             indices_b = self.rows_b
             dim = 1
 
-        assert((shape_a[0] % block_shape[0]) == 0)
         assert((shape_a[1] % block_shape[1]) == 0)
         assert(self.data.is_contiguous())
         assert(out.is_contiguous())
@@ -367,10 +366,8 @@ class BlockSparseMatrix:
         blocks_len = len(self.blocks) // 2
         block_shape = self.block_shape
 
-        assert ((shape_a[0] % block_shape[0]) == 0)
         assert ((shape_a[1] % block_shape[1]) == 0)
-        assert ((shape_b[0] % block_shape[0]) == 0)
-        assert ((shape_b[1] % block_shape[1]) == 0)
+        assert ((shape_b[1] % block_shape[0]) == 0)
 
         if overwrite_data:
             data = self.data

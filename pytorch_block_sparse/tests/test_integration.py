@@ -41,6 +41,9 @@ class TestFun(TestCase):
         verbose = False
 
         for i in range(2):
+            # => 70 million parameters instead of 84 million parameters when i = 1
+            print("model num parameters", model.num_parameters())
+
             input_ids = torch.tensor([[4, 5, 6, 7]*8]).cuda()
             input_ids = input_ids.expand((1, 32))
             out = model(input_ids)
@@ -48,14 +51,12 @@ class TestFun(TestCase):
                 print(out)
             if i == 0:
                 mp = SparseModelPatcher()
-                mp.add_pattern("roberta\.encoder\.layer\.0.intermediate\.dense")
-                mp.add_pattern("roberta\.encoder\.layer\..*\.output\.dense")
+                mp.add_pattern("roberta\.encoder\.layer\.[0-9]+.intermediate\.dense", {"density":0.5})
+                mp.add_pattern("roberta\.encoder\.layer\.[0-9]+.output\.dense", {"density":0.5})
                 mp.patch_model(model)
 
         # model.roberta.encoder.layer[5].intermediate.dense = torch.nn.Linear(768, 3072, True)
 
-        # => 60 million parameters instead of 84 million parameters
-        model.num_parameters()
 
 
 

@@ -46,7 +46,6 @@ class TestFun(TestCase):
             optimizer1 = optim.Adam([a2, dense, bias], lr=lr)
 
             for i in range(40):
-                print(f"i={i}")
                 s = dense.isclose(linear.weight.to_dense(), atol=1e-05).all()
 
                 if not s:

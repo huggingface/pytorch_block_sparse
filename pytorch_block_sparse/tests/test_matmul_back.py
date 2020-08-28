@@ -3,7 +3,7 @@ import torch
 import unittest
 from pytorch_block_sparse.block_sparse import BlockSparseMatrix
 from torch.autograd import gradcheck
-
+import math
 
 class TestFun(TestCase):
     def helper_(self, sizes, block_size, block_count = None, blocks = None, density = None, iterations = 1,
@@ -128,7 +128,14 @@ class TestFun(TestCase):
 
         return results
 
-    def check(self, results, block_size, blocks, verbose = False):
+    def check(self, results, sizes, block_size, blocks, verbose = False):
+        if isinstance(sizes[0], tuple):
+            sizes_0 = 1
+            for s in sizes[0]:
+                sizes_0 *= s
+        else:
+            sizes_0 = sizes[0]
+
         cutlass_result = results["cutlass"]["output"]
         pytorch_result = results["pytorch"]["output"]
 
@@ -149,47 +156,60 @@ class TestFun(TestCase):
             #print("cutlass full block\n", b_cutlass)
             #print("pytorch extracted block\n", b_pytorch)
 
-            compare = b_pytorch.isclose(b_cutlass, atol=0.1)
+
+            atol = 5e-5 * math.sqrt(sizes_0)
+            #print(f"atol={atol}, sizes={sizes}, max={b_cutlass.abs().max()}")
+            compare = b_pytorch.isclose(b_cutlass, atol=atol)
             torch.set_printoptions(profile="full")
             torch.set_printoptions(profile="default")
             #break
             if not compare.all().item():
                 #print("error on : i = %d" % i)
-                raise Exception("Comparison failed", blocks)
+                print(f"max diff={(b_pytorch-b_cutlass).abs().max()}, max_pytorch={b_pytorch.abs().max()},max_cutlass={b_cutlass.abs().max()}")
+                raise Exception(f"Comparison failed out_shape={cutlass_result.shape} blocks={blocks} sizes={sizes}")
 
 
-    def tst0(self):
-        size = 32
-        sizes = [size * 2, size * 4, size * 8]
-        #sizes = [size, size, size]
+    def test0(self):
+        bsize = 32
+        tests = [dict(sizes = [bsize * 2, bsize * 4, bsize * 8],
+                      block_tests=[[(0, 0)] ,[(0,1)], [(1,0)], [(1,0), (0,2)], [(1,0), (2,0), (3,0)]]),
+                 dict(sizes = [1, bsize, bsize], block_tests=[[(0, 0)]])
+                 ]
         block_size = (32, 32)
 
-        block_tests = [[(0, 0)],[(0,1)], [(1,0)], [(1,0), (0,2)], [(1,0), (2,0), (3,0)]]
-        for blocks in block_tests:
-            for non_contiguous_a in [False, True]:
-                for non_contiguous_b in [False, True]:
-                    results = self.helper(sizes, block_size, density = None, blocks = blocks, iterations = 1, inner_iterations = 1,
-                                          non_contiguous_a = non_contiguous_a, non_contiguous_b = non_contiguous_b)
-                    self.check(results, block_size, blocks, verbose = True)
-            #break
+        for test in tests:
+            sizes = test["sizes"]
+            blocks_tests = test["block_tests"]
+            for blocks in blocks_tests:
+                for non_contiguous_a in [False, True]:
+                    for non_contiguous_b in [False, True]:
+                        results = self.helper(sizes, block_size, density = None, blocks = blocks, iterations = 1, inner_iterations = 1,
+                                              non_contiguous_a = non_contiguous_a, non_contiguous_b = non_contiguous_b)
+                        self.check(results, sizes, block_size, blocks, verbose = False)
 
     def test1(self):
         size = 512
-        sizes = [(size * 16,  8), size * 2, size * 4]
 
-        density = 0.47
-        density = 1.0
+        test_sizes = [[(size * 16,  8), size * 2, size * 4],
+                      [1, size * 2, size * 4],
+                      ]
+        test_densities = [1.0] #0.47, 1.0]
 
         block_size = (32, 32)
         iterations = 4
         inner_iterations = 10
 
-        for non_contiguous_a in [False, True]:
-            for non_contiguous_b in [False, True]:
-                results = self.helper(sizes, block_size, density, iterations, inner_iterations, block_count = None,
-                                      non_contiguous_a=non_contiguous_a, non_contiguous_b=non_contiguous_b)
-
-                self.check(results, block_size, results["cutlass"]["output"].blocks)
+        for sizes in test_sizes:
+            for density in test_densities:
+                for non_contiguous_a in [False, True]:
+                    for non_contiguous_b in [False, True]:
+                        results = self.helper(sizes, block_size, density, iterations, inner_iterations, block_count = None,
+                                              non_contiguous_a=non_contiguous_a, non_contiguous_b=non_contiguous_b)
+                        try:
+                            self.check(results, sizes, block_size, results["cutlass"]["output"].blocks)
+                        except:
+                            raise Exception(
+                                f"Comparison NOK : matmul_with_output_sparse_support issue for sizes={sizes}, density={density}, non_contiguous_a={non_contiguous_a}, non_contiguous_b={non_contiguous_b}")
 
 
 if __name__ == '__main__':

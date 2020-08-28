@@ -466,7 +466,6 @@ struct block_task_back
         accumulator(scratch->accum_scratch)
     {
         //printf("dim_m = %d, dim_k = %d, dim_n = %d\n", dim_m, dim_k, dim_n);
-
         BlockTiles = loader_b.wholek_tiles_remaining;
     }
     // {printf("grid_raster.block_item_coords.x: %d, grid_raster.block_item_coords.y : %d, BlockIdX: %d \n", grid_raster.block_item_coords.x , grid_raster.block_item_coords.y, BlockIdX);}
@@ -546,10 +545,9 @@ struct block_task_back
                     accum_t c_slice = accum_t(0);
                     accum_t *c_ptr = my_c + i;
 
-                    // TODO
-                    //if ((grid_raster.block_item_coords.x + thread_item_coords_tile_x) < dim_n &&
-                    //    (grid_raster.block_item_coords.y + thread_item_coords_tile_y + i) < dim_m)
-                    if (1)
+
+                    if ((grid_raster_sparse.block_item_coords_src.x + thread_item_coords_tile_x) < dim_n &&
+                       (grid_raster_sparse.block_item_coords_src.y + thread_item_coords_tile_y + i) < dim_m)
                     {
                         if (must_init_addend)
                         {
@@ -649,11 +647,6 @@ struct block_task_back
         // if (grid_raster.block_item_coords.x / BlockItemsX == 3)
         // if(threadIdx.x == 0)    printf("BlockTiles: %d \n", BlockTiles);
 
-        // return if there is no live tile
-        if (BlockTiles < 1) 
-            return;
-
-        
         // Quit if the thread block is fully out-of-bounds
         if (grid_raster_sparse.is_block_oob(dim_m, dim_n))
         {

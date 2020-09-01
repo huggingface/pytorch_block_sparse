@@ -9,7 +9,7 @@ def readme():
         return f.read()
 
 setup(name='pytorch_block_sparse',
-      version='0.1',
+      version='v0.1',
       description='pytorch_block_sparse is a python package for fast block sparse matrices computation.',
       long_description=readme(),
       classifiers=[

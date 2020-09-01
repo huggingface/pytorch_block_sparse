@@ -29,7 +29,7 @@ You can use the BlockSparseLinear drop in replacement for torch.nn.Linear in you
 
 Or you can use a utility called BlockSparseModelPatcher to modify easily an existing model before training it.(you cannot magically sparsify a trained existing model, you will need to train it from scratch)
 
-Here is an example with a Roberta Model from Hugging Face ([full example](docs/notebooks/ModelSparsification.ipynb))
+Here is an example with a Roberta Model from Hugging Face ([full example](./doc/notebooks/ModelSparsification.ipynb))
 
 ```python
 from pytorch_block_sparse import BlockSparseModelPatcher

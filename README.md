@@ -85,4 +85,4 @@ python setup.py install
 ```
 
 # Development Notes
- You will find them ([here](doc/DevNotes.md))
+ You will find them [here](doc/DevNotes.md)

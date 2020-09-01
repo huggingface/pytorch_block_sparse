@@ -27,8 +27,8 @@ This would be even more general, as the sparsity pattern is not constrained, and
 ## Basic usage
 You can use the BlockSparseLinear drop in replacement for torch.nn.Linear in your own model.
 
-Or you can use a utility called BlockSparseModelPatcher to modify easily an existing model before training it.
-(you cannot magically sparsify a trained existing model, you will need to train it from scratch)
+Or you can use a utility called BlockSparseModelPatcher to modify easily an existing model before training it.(you cannot magically sparsify a trained existing model, you will need to train it from scratch)
+
 Here is an example with a Roberta Model from Hugging Face ([full example](docs/notebooks/ModelSparsification.ipynb))
 
 ```python
@@ -53,7 +53,11 @@ print(f"Final model parameters count={model.num_parameters()}")
 ```
 
 ## Future work
-- Implement some paper methods (and provide new ones) to optimize the sparse pattern during training, while doing the classic parameter optimization using backprop. The base example is to remove some smaller magnitude weights (or blocks of weights) at some positions and try other ones.  
+- Implement some paper methods (and provide new ones) to optimize the sparse pattern during training, while doing the classic parameter optimization using backprop. The basic idea is to remove some smaller magnitude weights (or blocks of weights) at some positions and try other ones.
+  - [Movement Pruning: Adaptive Sparsity by Fine-Tuning](https://arxiv.org/abs/2005.07683)
+  - [Sparse Networks from Scratch: Faster Training without Losing Performance](https://arxiv.org/abs/1907.04840)
+  - [Structured Pruning of Large Language Models](https://arxiv.org/abs/1910.04732)
+  - [Learning Sparse Neural Networks through L0 Regularization](https://arxiv.org/abs/1712.01312), )
 - Upgrade to latest CUTLASS version, to optimize speed for latest architectures (using Tensor Cores for example)
 - Use the new Ampere 50% sparse pattern within blocks themselves: more information on the [Hugging Face Blog](https://medium.com/huggingface/sparse-neural-networks-2-n-gpu-performance-b8bc9ce950fc).
 

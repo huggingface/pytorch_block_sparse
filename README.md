@@ -25,7 +25,32 @@ Google and Stanford June 2020 paper [Sparse GPU Kernels for Deep Learning](https
 This would be even more general, as the sparsity pattern is not constrained, and the performance looks very good, with some smart ad hoc optimizations.
 
 ## Basic usage
-  
+You can use the BlockSparseLinear drop in replacement for torch.nn.Linear in your own model.
+
+Or you can use a utility called BlockSparseModelPatcher to modify easily an existing model before training it.
+(you cannot magically sparsify a trained existing model, you will need to train it from scratch)
+Here is an example with a Roberta Model from Hugging Face ([full example](docs/notebooks/ModelSparsification.ipynb))
+
+'''
+from pytorch_block_sparse import BlockSparseModelPatcher
+# Create a model patcher
+mp = BlockSparseModelPatcher()
+
+# Selecting some layers to sparsify.
+# This is the "artful" part, as some parts are more prone to be sparsified, other may impact model precision too much.
+
+# Match layers using regexp (we escape the ., just because, it's more correct, but it does not change anything here)
+# the [0-9]+ match any layer number.
+# We setup a density of 0.5 on these layers, you can test other layers / densities .
+mp.add_pattern("roberta\.encoder\.layer\.[0-9]+\.intermediate\.dense", {"density":0.5})
+mp.add_pattern("roberta\.encoder\.layer\.[0-9]+\.output\.dense", {"density":0.5})
+mp.add_pattern("roberta\.encoder\.layer\.[0-9]+\.attention\.output\.dense", {"density":0.5})
+mp.patch_model(model)
+
+print(f"Final model parameters count={model.num_parameters()}")
+
+# => 68 million parameters instead of 84 million parameters (embeddings are taking a lof space in Roberta)
+'''
 
 ## Future work
 - Implement some paper methods (and provide new ones) to optimize the sparse pattern during training, while doing the classic parameter optimization using backprop. The base example is to remove some smaller magnitude weights (or blocks of weights) at some positions and try other ones.  

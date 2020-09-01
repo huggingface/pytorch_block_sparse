@@ -10,7 +10,7 @@ def readme():
 
 setup(name='pytorch_block_sparse',
       version='v0.1',
-      description='pytorch_block_sparse is a python package for fast block sparse matrices computation.',
+      description='pytorch_block_sparse is a python package for fast block sparse matrices computation, drop in replacement for torch.nn.Linear .',
       long_description=readme(),
       classifiers=[
         'Development Status :: 4 - Beta',
@@ -21,7 +21,8 @@ setup(name='pytorch_block_sparse',
       url='',
       author='',
       author_email='',
-      license='MIT',
+      download_url='https://github.com/huggingface/pytorch_block_sparse/archive/v0.1.tar.gz',
+      license='BSD 3-Clause "New" or "Revised" License',
       packages=['pytorch_block_sparse'],
       install_requires=[],
       include_package_data=True,

@@ -371,7 +371,7 @@ class BlockSparseMatrix(torch.nn.Module):
         assert(shape_c[0] == shape_a[1])
         assert(shape_c[1] == shape_b[1])
 
-        blocks_len = len(self.blocks) // 2
+        blocks_len = self.blocks.shape[0] // 2
         block_shape = self.block_shape
 
         assert ((shape_a[1] % block_shape[1]) == 0)

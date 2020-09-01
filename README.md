@@ -7,7 +7,7 @@ This allows very easy experimentation, as you just have to replace the Linear la
 The incentive to create this library is to let people test the idea that **sparse matrices can be used in neural networks**, instead of dense ones, without significantly altering the precision.  
  
 This would be great news as sparse matrices allows savings in both space and compute: a **50% sparse matrix** will use **only 50% memory**, and theoretically will use only 50% of computation.
-However, due to the very optimized nature of cuBLAS based torch.nn.Linear, this lib is slower, by roughly a factor of 2 (this may be improved in the future).
+However, due to the very optimized nature of cuBLAS based torch.nn.Linear, this library is slower, by roughly a factor of 2 (this may be improved in the future).
 But the performance gain of using sparse matrices grows with the sparsity, so a **75% sparse matrix** is roughly **2x** faster than the dense equivalent.
 
 This could prove useful, and could be combined with other methods like distillation and quantization to reduce further the networks.  
@@ -29,7 +29,7 @@ You can use the BlockSparseLinear drop in replacement for torch.nn.Linear in you
 
 Or you can use a utility called BlockSparseModelPatcher to modify easily an existing model before training it.(you cannot magically sparsify a trained existing model, you will need to train it from scratch)
 
-Here is an example with a Roberta Model from Hugging Face ([full example](./doc/notebooks/ModelSparsification.ipynb))
+Here is an example with a Roberta Model from Hugging Face ([full example](doc/notebooks/ModelSparsification.ipynb))
 
 ```python
 from pytorch_block_sparse import BlockSparseModelPatcher
@@ -52,6 +52,18 @@ print(f"Final model parameters count={model.num_parameters()}")
 # => 68 million parameters instead of 84 million parameters (embeddings are taking a lof space in Roberta)
 ```
 
+##Performance
+It's notoriously hard to approach cuBLAS performance with custom CUDA kernels.
+OpenAI kernels for example make ample use of assembly language to achieve a good performance.
+
+The promise of Cutlass was to provide tools that abstract the different parts of CUDA kernels using smart C++ templates.
+
+This allows the `pytorch_block_sparse` library to achieve roughly 50% of cuBLAS performance:
+depending on the exact matrix computation, it achieves 40% to 55% of the cuBLAS performance on large matrices 
+(which is the case when using large batch x sequence sizes in Transformers for example).
+Practically, this means that a Transformer with BlockSparseLinear with a 50% sparsity is as fast as the dense version.
+This may be improved in next releases, especially when newer version of Cutlass are used.   
+
 ## Future work
 - Implement some paper methods (and provide new ones) to optimize the sparse pattern during training, while doing the classic parameter optimization using backprop. The basic idea is to remove some smaller magnitude weights (or blocks of weights) at some positions and try other ones.
   - [Movement Pruning: Adaptive Sparsity by Fine-Tuning](https://arxiv.org/abs/2005.07683)
@@ -66,3 +78,6 @@ In the root directory just execute:
 ```
 python setup.py install 
 ```
+
+# Development Notes
+ You will find them ([here](doc/DevNotes.md))

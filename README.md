@@ -12,7 +12,7 @@ But the performance gain of using sparse matrices grows with the sparsity, so a 
 
 This could prove useful, and could be combined with other methods like distillation and quantization to reduce further the networks.  
 
-## Base code
+## Original code
 This work is based on the [cutlass tilesparse](https://github.com/YulhwaKim/cutlass_tilesparse) proof of concept by [Yulhwa Kim](https://github.com/YulhwaKim).
 
 It is using C++ CUDA templates for block-sparse matrix multiplication based on [CUTLASS](https://developer.nvidia.com/blog/cutlass-linear-algebra-cuda/).

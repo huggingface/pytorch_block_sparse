@@ -79,7 +79,7 @@ You can just use pip:
 pip install pytorch-block-sparse
 ```
 
-Or from sourvce, clone this git repository, and in the root directory just execute: 
+Or from source, clone this git repository, and in the root directory just execute: 
 ```
 python setup.py install 
 ```

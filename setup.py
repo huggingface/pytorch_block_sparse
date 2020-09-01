@@ -4,24 +4,22 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 import os
 rootdir = os.path.dirname(os.path.realpath(__file__))
 
-def readme():
-    with open('README.md') as f:
-        return f.read()
+version = "0.1.1"
 
 setup(name='pytorch_block_sparse',
-      version='v0.1',
-      description='pytorch_block_sparse is a python package for fast block sparse matrices computation, drop in replacement for torch.nn.Linear .',
-      long_description=readme(),
+      version=version,
+      description='PyTorch extension for fast block sparse matrices computation, drop in replacement for torch.nn.Linear.',
+      long_description="pytorch_block_sparse is a PyTorch extension for fast block sparse matrices computation, drop in replacement for torch.nn.Linear",
       classifiers=[
         'Development Status :: 4 - Beta',
-        'License :: OSI Approved :: BSD 3-Clause "New" or "Revised" License',
+        'License :: OSI Approved :: BSD License',
         'Programming Language :: Python :: 3.0',
       ],
-      keywords='',
-      url='',
-      author='',
-      author_email='',
-      download_url='https://github.com/huggingface/pytorch_block_sparse/archive/v0.1.tar.gz',
+      keywords='PyTorch,sparse,matrices,machine learning',
+      url='https://github.com/huggingface/pytorch_block_sparse',
+      author='François Lagunas',
+      author_email='francois.lagunas@m4x.org',
+      download_url=f'https://test.pypi.org/project/pytorch-block-sparse/{version}/',
       license='BSD 3-Clause "New" or "Revised" License',
       packages=['pytorch_block_sparse'],
       install_requires=[],

@@ -31,7 +31,7 @@ Or you can use a utility called BlockSparseModelPatcher to modify easily an exis
 (you cannot magically sparsify a trained existing model, you will need to train it from scratch)
 Here is an example with a Roberta Model from Hugging Face ([full example](docs/notebooks/ModelSparsification.ipynb))
 
-'''
+```python
 from pytorch_block_sparse import BlockSparseModelPatcher
 # Create a model patcher
 mp = BlockSparseModelPatcher()
@@ -50,7 +50,7 @@ mp.patch_model(model)
 print(f"Final model parameters count={model.num_parameters()}")
 
 # => 68 million parameters instead of 84 million parameters (embeddings are taking a lof space in Roberta)
-'''
+```
 
 ## Future work
 - Implement some paper methods (and provide new ones) to optimize the sparse pattern during training, while doing the classic parameter optimization using backprop. The base example is to remove some smaller magnitude weights (or blocks of weights) at some positions and try other ones.  

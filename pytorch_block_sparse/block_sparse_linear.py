@@ -140,7 +140,7 @@ class BlockSparseLinear(nn.Module):
         if density < 0 or density > 1:
             raise Exception(f"BlockSparseLinear invalid density={density}")
 
-        block_count = int(density * (in_features * out_features / (self.BLOCK_SIZE * self.BLOCK_SIZE)))
+        self.block_count = int(density * (in_features * out_features / (self.BLOCK_SIZE * self.BLOCK_SIZE)))
 
         self.in_features = in_features
         self.out_features = out_features
@@ -148,15 +148,14 @@ class BlockSparseLinear(nn.Module):
         block_shape = (self.BLOCK_SIZE, self.BLOCK_SIZE)
         if torch_nn_linear is not None:
             with torch.no_grad():
-                weight = BlockSparseMatrix.from_dense(torch_nn_linear.weight, block_shape, density)
+                weight = BlockSparseMatrix.from_dense(torch_nn_linear.weight, block_shape, self.block_count)
         else:
             weight = BlockSparseMatrix.randn((out_features, in_features),
-                                             block_count,
+                                             self.block_count,
                                              blocks=None,
                                              block_shape=block_shape,
                                              device="cuda")
         self.weight = weight
-        self.weight_data = torch.nn.Parameter(self.weight.data)
 
         if bias:
             self.bias = nn.Parameter(torch.zeros(out_features, device = "cuda"))
@@ -167,7 +166,7 @@ class BlockSparseLinear(nn.Module):
             self.register_parameter('bias', None)
 
     def forward(self, x):
-        x = self.fn(x, self.weight_data, self.weight)
+        x = self.fn(x, self.weight.data, self.weight)
         if self.bias is not None:
             x = x + self.bias
         return x

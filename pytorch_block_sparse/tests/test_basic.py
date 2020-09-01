@@ -20,6 +20,7 @@ class TestFun(TestCase):
             size = test_info["size"]
             blocks  =test_info["blocks"]
             bsm = BlockSparseMatrix.randn((size[0], size[1]), None, blocks=blocks, block_shape=block_shape, device=device)
+
             for key in test_info:
                 if "row" in key or "col" in key:
                     bsm_a = getattr(bsm, key)
@@ -28,7 +29,7 @@ class TestFun(TestCase):
                     if not check:
                         raise Exception(f"Non matching attribute {key}:\n{bsm_a}\n!=\n{ref} (ref).")
 
-    def tst1(self):
+    def test1(self):
         sizes = [(32, 32), (64, 32), (32, 64), (64, 64), (256, 64)]
         for size in sizes:
             print(f"size={size}")
@@ -40,7 +41,7 @@ class TestFun(TestCase):
             a = bsm.to_dense()
             bsm.check_with_dense(a)
 
-            bsm2 = BlockSparseMatrix.from_dense(a, block_shape, density=1.0)
+            bsm2 = BlockSparseMatrix.from_dense(a, block_shape, block_count = None)
             bsm2.check_with_dense(a)
 
             a2 = bsm2.to_dense()
@@ -48,6 +49,11 @@ class TestFun(TestCase):
             if not (a == a2).all():
                 print((a == a2)[::8,::8])
                 raise Exception("Non matching matrices, BlockSparseMatrix.from_dense is not correct.")
+
+    def test2(self):
+        bsm = BlockSparseMatrix.zeros((32, 32), 1, block_shape=(32,32), device="cuda")
+        hash(bsm)
+
 
 
 

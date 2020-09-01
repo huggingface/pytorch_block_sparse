@@ -12,14 +12,13 @@ class TestFun(TestCase):
 
     def helper(self, model, input_tensor, patterns):
         for i in range(2):
-            print(f"i={i}\n", model(input_tensor))
             if i == 0:
                 mp = SparseModelPatcher()
                 for p in patterns:
-                    mp.add_pattern(p)
+                    mp.add_pattern(p, {"density":0.5})
                 mp.patch_model(model)
 
-    def tst1(self):
+    def test1(self):
         linear = torch.nn.Linear(64, 128, False)
         model = torch.nn.Sequential(linear).cuda()
         input_tensor = torch.randn(64, 64).cuda()

@@ -27,7 +27,7 @@ class TestFun(TestCase):
             # Create the sparse linear layer
             linear = BlockSparseLinear(size_b[0], size_b[1], True, test["density"])
             if verbose:
-                print(linear.weight_data[::stride,::stride])
+                print(linear.weight.data[::stride,::stride])
 
             # TODO : this does nothing
             linear.cuda()
@@ -50,11 +50,6 @@ class TestFun(TestCase):
 
                 if not s:
                     raise Exception("Matrices are different")
-
-                s = linear.weight_data.isclose(linear.weight.data, atol=1e-05).all()
-
-                if not s:
-                    raise Exception("Weight_data and weight.data are different")
 
                 optimizer0.zero_grad()
                 optimizer1.zero_grad()
@@ -96,10 +91,10 @@ class TestFun(TestCase):
                     print("a1 grad\n", a1.grad[::stride,::stride])
                     print("a2 grad\n", a2.grad[::stride,::stride])
 
-                    print(linear.weight_data.grad)
+                    print(linear.weight.data.grad)
 
-                dense_grad = linear.weight.to_dense(data_replace=linear.weight_data.grad)
-                dense_mask = linear.weight.to_dense(data_replace=torch.ones_like(linear.weight_data.grad))
+                dense_grad = linear.weight.to_dense(data_replace=linear.weight.data.grad)
+                dense_mask = linear.weight.to_dense(data_replace=torch.ones_like(linear.weight.data.grad))
 
                 dense_grad_reference = dense.grad * dense_mask
 

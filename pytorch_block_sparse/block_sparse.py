@@ -1,37 +1,40 @@
 import torch
+import torch.nn
 import numpy
 import warnings
 
-class BlockSparseMatrix:
+class BlockSparseMatrix(torch.nn.Module):
     # cols is a list of nonzero block column indexes (int32)
     # row_start is a index into cols (int32)
     # Data is (len(cols), block_shape, block_shape)
     def __init__(self, shape, block_mask, data, block_shape=(16, 16)):
+        super(BlockSparseMatrix, self).__init__()
+
         if block_mask.device != data.device:
             raise Exception("block_mask and data should have same device, got %s and %s" % (block_mask.device, data.device))
-
-        self.device = block_mask.device
 
         if len(shape) != 2 or shape[0] % 16 != 0 or shape[1] % 16 != 0:
             raise Exception("shape should be a tuple of 2 multiples of 16")
         self.shape = torch.Size(shape)
         if len(block_shape) != 2 or block_shape[0] % 16 != 0 or block_shape[1] % 16 != 0:
             raise Exception("block_shape should be a tuple of 2 multiples of 16")
-        self.block_shape = block_shape
+        self.block_shape = tuple(block_shape)
 
-        self.block_mask = block_mask
-        self.build_indices()
+        blocks, cols_a, row_start_ends_a, rows_b, col_start_ends_b = self.build_indices(block_mask)
 
         if len(data.shape) != 2:
             raise Exception("data should be bidimensional, not of shape %s" % data.shape)
-        if data.shape[0] != self.cols_a.shape[0] * block_shape[0]:
-            raise Exception("data.shape[0] (%d) should be equal to cols.shape[0]*block_shape[0] (%d)" % (data.shape[0], self.cols_a.shape[0] * block_shape[0]))
+        if data.shape[0] != cols_a.shape[0] * block_shape[0]:
+            raise Exception("data.shape[0] (%d) should be equal to cols.shape[0]*block_shape[0] (%d)" % (data.shape[0], cols_a.shape[0] * block_shape[0]))
         if data.shape[1] !=  block_shape[1]:
             raise Exception("data.shape[1] (%d) should be equal to block_shape[1] (%d)" % (data.shape[1], block_shape[1]))
         if data.dtype != torch.float32:
             raise Exception("data should be float32, not of type %s" % data.dtype)
 
-        self.data = data
+
+        self.data = torch.nn.Parameter(data)
+        for name in ("block_mask", "cols_a", "row_start_ends_a", "rows_b", "col_start_ends_b", "blocks"):
+            self.register_buffer(name, locals()[name])
 
         self.sanity_check(self.cols_a, self.row_start_ends_a, self.shape, self.block_shape)
         self.sanity_check(self.rows_b, self.col_start_ends_b, (self.shape[1], self.shape[0]), (self.block_shape[1], self.block_shape[0]))
@@ -43,20 +46,17 @@ class BlockSparseMatrix:
     def blocks_count(self):
         return self.blocks_count_(self.shape, self.block_shape)
 
-    def to(self, device):
-        for a in ["block_mask", "data", "cols_a", "row_start_ends_a", "rows_b", "col_start_ends_b"]:
-            getattr(self, a).to(device)
-
-    def build_indices_(self, nnzt, transpose_indices):
+    def build_indices_(self, block_mask, nnzt, transpose_indices):
+        device = block_mask.device
         X, Y = self.blocks_count_(self.shape, self.block_shape)
 
         rows = nnzt[0]
         cols = nnzt[1]
 
-        block_shuffle = torch.arange(0, cols.shape[0], device = self.device)
+        block_shuffle = torch.arange(0, cols.shape[0], device = device)
 
         if transpose_indices:
-            block_indices = torch.zeros(X*Y, dtype=torch.long, device = self.device)
+            block_indices = torch.zeros(X*Y, dtype=torch.long, device = device)
             positions = rows * Y + cols
             # Set the index of used blocks at the used blocks positions : rest will stay zero
             # Add 1 temporarily to use 0 as a special value
@@ -72,31 +72,33 @@ class BlockSparseMatrix:
 
             rows = cols
 
-            nnztt = self.block_mask.t().nonzero()
+            nnztt = block_mask.t().nonzero()
             cols = nnztt[:,1]
 
-        row_start_ends = torch.zeros((X + 1,), dtype=torch.long, device = self.device)
+        row_start_ends = torch.zeros((X + 1,), dtype=torch.long, device = device)
 
-        row_start_ends.index_add_(0, rows + 1, torch.ones(size=(cols.shape[0],), dtype=torch.long, device = self.device))
+        row_start_ends.index_add_(0, rows + 1, torch.ones(size=(cols.shape[0],), dtype=torch.long, device = device))
         row_start_ends = row_start_ends.cumsum(0).int()
 
         cols = torch.stack([cols, block_shuffle], 1).int()
 
         return cols, row_start_ends
 
-    def build_indices(self):
-        nnz = self.block_mask.nonzero()
-        self.blocks = nnz.flip(-1).flatten().to(dtype=torch.int32)
+    def build_indices(self, block_mask):
+        nnz = block_mask.nonzero()
+        blocks = nnz.flip(-1).flatten().to(dtype=torch.int32)
 
         nnzt = nnz.transpose(0, 1)
-        self.cols_a, self.row_start_ends_a = self.build_indices_(nnzt, False)
-        self.rows_b, self.col_start_ends_b  = self.build_indices_(nnzt, True)
+        cols_a, row_start_ends_a = self.build_indices_(block_mask, nnzt, False)
+        rows_b, col_start_ends_b = self.build_indices_(block_mask, nnzt, True)
 
         verbose = False
 
         if verbose:
             print(f"row_start_ends_a=\n {self.row_start_ends_a}\ncols_a=\n {self.cols_a}\n")
             print(f"col_start_ends_b=\n {self.col_start_ends_b}\nrows_b=\n {self.rows_b}\n")
+
+        return blocks, cols_a, row_start_ends_a, rows_b, col_start_ends_b
 
     @classmethod
     def zeros(cls, shape, n_blocks = None, blocks = None, block_shape=(32, 32), device = "cuda"):
@@ -136,16 +138,19 @@ class BlockSparseMatrix:
     @classmethod
     def randn(cls, shape, n_blocks, blocks = None, block_shape=(32, 32), device = "cuda"):
         ret = cls.zeros(shape, n_blocks, blocks, block_shape, device)
-        torch.randn(ret.data.shape, out=ret.data)
+        with torch.no_grad():
+            ret.data.normal_()
         return ret
 
     @classmethod
-    def from_dense(cls, dense, block_shape = (32, 32), density=0.5):
-        n_blocks = int(density * (dense.shape[0] * dense.shape[1] / (block_shape[0]  * block_shape[1])))
-        assert (density > 0.0)
-        ret = cls.zeros(dense.shape, n_blocks = n_blocks, block_shape = block_shape, device = dense.device)
+    def from_dense(cls, dense, block_shape = (32, 32), block_count = None):
+        dense_block_count = (dense.shape[0] * dense.shape[1]) // (block_shape[0] * block_shape[1])
+        if block_count == None:
+            block_count = dense_block_count
 
-        if density == 1:
+        ret = cls.zeros(dense.shape, n_blocks = block_count, block_shape = block_shape, device = dense.device)
+
+        if block_count == dense_block_count:
             # TODO : use some pytorch dimensions transposition to speed up this block by block copy
             coo = ret.build_coo_block_index().long()
 
@@ -155,7 +160,8 @@ class BlockSparseMatrix:
                 ret.data[i * bs[0]:(i + 1) * bs[0], :] = dense[r * bs[0]:(r + 1) * bs[0], c * bs[1]:(c + 1) * bs[1]].t()
         else:
             param_count = ret.data.numel()
-            ret.data = dense.flatten()[:param_count].reshape(ret.data.shape) / density
+            density = block_count / dense_block_count
+            ret.data.copy_(dense.flatten()[:param_count].reshape(ret.data.shape) / density)
 
         return ret
 
@@ -168,15 +174,16 @@ class BlockSparseMatrix:
                                                                                self.block_shape)
 
     def build_coo_block_index(self):
+        device = self.cols_a.device
         # Build a tensor to store the row indices.
         # It's one element too long for the moment, we'll trim it later
-        rows = torch.zeros((self.cols_a.shape[0] + 1), dtype=torch.int32, device=self.device)
+        rows = torch.zeros((self.cols_a.shape[0] + 1), dtype=torch.int32, device=device)
 
         # Change self.row_start_ends_a to the right type
         row_end_prepare = self.row_start_ends_a[1:].long()
 
         # Add ones to the start position of each new row
-        rows.index_add_(0, row_end_prepare, torch.ones(size=row_end_prepare.shape, dtype=torch.int32, device=self.device))
+        rows.index_add_(0, row_end_prepare, torch.ones(size=row_end_prepare.shape, dtype=torch.int32, device=device))
 
         # Accumulate those start positions to fill the remaining positions
         rows = rows.cumsum(0).int()
@@ -213,6 +220,7 @@ class BlockSparseMatrix:
         if len(cols.shape) != 2:
             raise Exception("cols should be bidimensional, not of shape %s" % cols.shape)
         if cols.dtype != torch.int32:
+
             raise Exception("cols should be int32, not of type %s" % cols.dtype)
         max_col = cols[:,0].max()
         if max_col > shape[1] / block_shape[1]:

@@ -1,9 +1,8 @@
 from unittest import TestCase
 import torch
 import unittest
-from torch.autograd import gradcheck
 import torch.optim as optim
-from pytorch_block_sparse.block_sparse_linear import BlockSparseLinear
+from pytorch_block_sparse import BlockSparseLinear
 
 class TestFun(TestCase):
     def test0(self):

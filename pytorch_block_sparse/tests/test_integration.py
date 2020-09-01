@@ -3,8 +3,7 @@ from unittest import TestCase
 import torch
 from transformers import RobertaConfig
 from transformers import RobertaForMaskedLM
-from pytorch_block_sparse.block_sparse_linear import BlockSparseLinear
-from pytorch_block_sparse.util import SparseModelPatcher
+from pytorch_block_sparse import BlockSparseModelPatcher
 
 
 
@@ -13,7 +12,7 @@ class TestFun(TestCase):
     def helper(self, model, input_tensor, patterns):
         for i in range(2):
             if i == 0:
-                mp = SparseModelPatcher()
+                mp = BlockSparseModelPatcher()
                 for p in patterns:
                     mp.add_pattern(p, {"density":0.5})
                 mp.patch_model(model)
@@ -49,15 +48,10 @@ class TestFun(TestCase):
             if verbose:
                 print(out)
             if i == 0:
-                mp = SparseModelPatcher()
+                mp = BlockSparseModelPatcher()
                 mp.add_pattern("roberta\.encoder\.layer\.[0-9]+.intermediate\.dense", {"density":0.5})
                 mp.add_pattern("roberta\.encoder\.layer\.[0-9]+.output\.dense", {"density":0.5})
                 mp.patch_model(model)
-
-        # model.roberta.encoder.layer[5].intermediate.dense = torch.nn.Linear(768, 3072, True)
-
-
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -2,8 +2,7 @@ import torch
 import unittest
 from unittest import TestCase
 import tempfile
-from pytorch_block_sparse.block_sparse import BlockSparseMatrix
-from pytorch_block_sparse.block_sparse_linear import BlockSparseLinear
+from pytorch_block_sparse import BlockSparseMatrix, BlockSparseLinear
 
 class TestFun(TestCase):
     def test0(self):

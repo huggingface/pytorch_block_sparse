@@ -1,8 +1,7 @@
 from unittest import TestCase
 import torch
 import unittest
-from pytorch_block_sparse.block_sparse import BlockSparseMatrix
-import math
+from pytorch_block_sparse import BlockSparseMatrix
 
 class TestFun(TestCase):
     def helper(self, sizes, block_size, block_count = None, density = None, blocks = None, iterations = 1, device = "cuda", transpose = True, verbose = False):
@@ -12,10 +11,11 @@ class TestFun(TestCase):
         else:
             sizes_0 = (sizes[0],)
 
+        # Build positive matrix to easily check results
         if transpose:
-            a = torch.randn(sizes_0 + (sizes[1],), device=device)
+            a = torch.randn(sizes_0 + (sizes[1],), device=device).abs()
         else:
-            a = torch.randn(sizes_0 + (sizes[2],), device=device)
+            a = torch.randn(sizes_0 + (sizes[2],), device=device).abs()
 
         #torch.set_printoptions(precision=10, edgeitems=100000, linewidth=10000)
         if verbose:
@@ -26,6 +26,11 @@ class TestFun(TestCase):
             block_count = int(total_block_count * density)
 
         bsm = BlockSparseMatrix.randn((sizes[2], sizes[1]), block_count, blocks = blocks, block_shape=block_size, device=device)
+
+        # Build positive matrix to easily check results
+        with torch.no_grad():
+            bsm.data.copy_(bsm.data.abs())
+
         dbsm = bsm.to_dense()
         if verbose:
             print("b=", dbsm, "\n")
@@ -88,18 +93,18 @@ class TestFun(TestCase):
                     print("equals\n", ((c_ - c0_).abs() < 1e-06).long())
                     print("equals nonzero\n", ((c_ - c0_).abs() > 1e-06).nonzero().t())
 
-                norm = a.shape[1]
-                atol = 2e-06 * math.sqrt(norm)
-                rtol = 1e-05
-                s = c.isclose(c0, rtol=rtol, atol=atol).all()
+                atol = 1e-8
+                rtol = 1e-5
+                # Matrix are positive, so this is ok
+                s = c.isclose(c0).all()
                 if not s.item():
                     print(f"max difference for {t['kind']} = { (c - c0).abs().max()}, max_values={c.abs().max()}, {c0.abs().max()}")
-                    print(f"ratio = {((c - c0).abs()/(atol + rtol * c0.abs())).max()}")
+                    diff = (c - c0).abs() / (atol + rtol * c0.abs())
                     t["comparison"] = False
-                    raise Exception(f"Comparison NOK : reversed_matmul issue for {k} sizes={sizes}, density={density}, block_count={block_count}, blocks ={blocks}, transpose = {transpose}")
+                    raise Exception(f"Comparison NOK : reverse_matmul issue for {k} sizes={sizes}, density={density}, block_count={block_count}, blocks ={blocks}, transpose = {transpose}")
                 else:
                     if verbose:
-                        print(f"Comparison OK for reversed_matmul for {k}")
+                        print(f"Comparison OK for reverse_matmul for {k}")
                         print("max difference %s=" % t["kind"], (c - c0).abs().max())
                     t["comparison"] = True
                 if verbose:
@@ -190,31 +195,27 @@ class TestFun(TestCase):
 
     def test1(self):
         size = 512
-        sizes = [(4 * size * 2, 16), size * 2, size * 4]
-        test_sizes = [[8 * size * 16, size * 2, size * 4],
+        test_sizes = [[1, size * 2, size * 4],
+                      [8 * size * 16, size * 2, size * 4],
                       [(4 * size * 2, 16), size * 2, size * 4],
-                      [1, size * 2, size * 4],
                       ]
-
-        #sizes = [(4 * 2, 16), size * 2, size * 4]
-        #size = 32
-        #sizes = [32, size * 2, size * 2]
 
         test_densities = [0.42, 1.0]
 
         import functools
         import operator
-        if isinstance(sizes[0], int):
-            sizes_0 = sizes[0]
-        else:
-            sizes_0 = functools.reduce(operator.mul, sizes[0], 1)
-        flops = float(2 * sizes_0 * sizes[1] * sizes[2])
 
         block_size = (32, 32)
         iterations = 1
 
         results = {}
         for sizes in test_sizes:
+            if isinstance(sizes[0], int):
+                sizes_0 = sizes[0]
+            else:
+                sizes_0 = functools.reduce(operator.mul, sizes[0], 1)
+            flops = float(2 * sizes_0 * sizes[1] * sizes[2])
+
             for density in test_densities:
                 for transpose in [False, True]:
                     for i in range(1):
@@ -226,6 +227,8 @@ class TestFun(TestCase):
                             pytorch_time = None
 
                         for kind, d in timings.items():
+                            if kind == "pytorch":
+                                continue
                             if kind not in results:
                                 results[kind] = {True:0, False:0}
                             if "comparison" in d:
@@ -238,9 +241,9 @@ class TestFun(TestCase):
                             else:
                                 ratio = kind_elapsed / pytorch_time
                             gflops = flops * iterations / kind_elapsed / 1e6
-                            print(f"kind = {kind}, transpose = {transpose}, elapsed={kind_elapsed}, gflops = {gflops}, ratio = {ratio}")
+                            print(f"density={density}, transpose = {transpose}, elapsed={kind_elapsed}, gflops = {gflops}, ratio = {ratio}")
 
-                    print(results)
+                    #print(results)
 
 if __name__ == '__main__':
     unittest.main()

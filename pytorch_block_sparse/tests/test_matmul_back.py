@@ -1,9 +1,7 @@
 from unittest import TestCase
 import torch
 import unittest
-from pytorch_block_sparse.block_sparse import BlockSparseMatrix
-from torch.autograd import gradcheck
-import math
+from pytorch_block_sparse import BlockSparseMatrix
 
 class TestFun(TestCase):
     def helper_(self, sizes, block_size, block_count = None, blocks = None, density = None, iterations = 1,
@@ -15,8 +13,9 @@ class TestFun(TestCase):
         else:
             sizes_0 = (sizes[0],)
 
-        a = torch.randn(sizes_0 + (sizes[1],), device=device)
-        b = torch.randn(sizes_0 + (sizes[2],), device=device)
+        # Build positive matrices to easily check results
+        a = torch.randn(sizes_0 + (sizes[1],), device=device).abs()
+        b = torch.randn(sizes_0 + (sizes[2],), device=device).abs()
 
         if non_contiguous_a:
             a = a.transpose(-2, -1).contiguous().transpose(-2, -1)
@@ -68,21 +67,18 @@ class TestFun(TestCase):
                 c = t["output"]
 
                 c_dense = c.to_dense()
-#                print(c_dense)
 
                 c0_ = c0 * (c_dense != 0)
 
-#                print(c_dense.shape, c0_.shape)
-
-                s = c_dense.isclose(c0_, atol=1e-02).all()
+                s = c_dense.isclose(c0_, rtol=1e-4).all()
 
                 if not s.item():
-                    print("Comparison NOK : transposed_matmul issue for ", k)
-                    print("max difference %s=" % t["kind"], (c_dense - c0_).abs().max())
+                    print("max difference %s=" % t["kind"], float((c_dense - c0_).abs().max()), float(c.data.abs().max()))
+                    raise Exception("Comparison NOK : matmul_with_output_sparse_support issue for ", k)
                     t["comparison"] = False
                 else:
-                    print("Comparison OK for transposed_matmul for ", k)
-                    print("max difference %s=" % t["kind"], (c_dense - c0_).abs().max())
+                    #print("Comparison OK for matmul_with_output_sparse_support for ", k)
+                    #print("max difference %s=" % t["kind"], float((c_dense - c0_).abs().max()))
                     t["comparison"] = True
 
         return results
@@ -111,6 +107,8 @@ class TestFun(TestCase):
                 pytorch_time = None
 
             for kind, d in results.items():
+                if kind == "pytorch":
+                    continue
                 if kind not in report:
                     report[kind] = {True: 0, False: 0}
                 if "comparison" in d:
@@ -146,26 +144,16 @@ class TestFun(TestCase):
             print("cutlass block[0][0]", cutlass_result.data[::stride, ::stride].t())
             print("pytorch blocks[0][0]", pytorch_result[::stride, ::stride])
         for i in range(cutlass_result.blocks.shape[0] // 2):
-            #print("i=", i)
             b = cutlass_result.blocks[i * 2:i * 2+2].flip(0) * torch.tensor(block_size, device=cutlass_result.blocks.device)
-            #print("block position", b)
-
             b_pytorch = pytorch_result[b[0]:b[0] + block_size[0], b[1]:b[1] + block_size[1]]
 
             b_cutlass = cutlass_result.data[i*32:i*32 + 32].t()
-            #print("cutlass full block\n", b_cutlass)
-            #print("pytorch extracted block\n", b_pytorch)
 
-
-            atol = 5e-5 * math.sqrt(sizes_0)
-            #print(f"atol={atol}, sizes={sizes}, max={b_cutlass.abs().max()}")
-            compare = b_pytorch.isclose(b_cutlass, atol=atol)
-            torch.set_printoptions(profile="full")
-            torch.set_printoptions(profile="default")
-            #break
+            compare = b_pytorch.isclose(b_cutlass, rtol=1e-4)
             if not compare.all().item():
-                #print("error on : i = %d" % i)
-                print(f"max diff={(b_pytorch-b_cutlass).abs().max()}, max_pytorch={b_pytorch.abs().max()},max_cutlass={b_cutlass.abs().max()}")
+                rel_diff = ((b_pytorch-b_cutlass).abs() / (1e-9 + b_pytorch.abs())).abs().max()
+                max_diff = (b_pytorch-b_cutlass).abs().max()
+                print(f"rel diff={rel_diff}, max diff={max_diff}, max_pytorch={b_pytorch.abs().max()}, max_cutlass={b_cutlass.abs().max()}")
                 raise Exception(f"Comparison failed out_shape={cutlass_result.shape} blocks={blocks} sizes={sizes}")
 
 

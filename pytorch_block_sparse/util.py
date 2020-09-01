@@ -47,7 +47,7 @@ class ModelPatcher():
                 father = modules[father_module_name]
                 self.replace_module(father, k, child_name, v, pattern_info)
 
-class SparseModelPatcher(ModelPatcher):
+class BlockSparseModelPatcher(ModelPatcher):
     def is_patchable(self, module_name, module, raiseError):
         if isinstance(module, torch.nn.Linear):
             return True

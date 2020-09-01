@@ -22,11 +22,15 @@ OpenAI announced in January 2020 that their very advanced (and complex) TensorFl
 Unfortunately this has not happened yet.
 
 Google and Stanford June 2020 paper [Sparse GPU Kernels for Deep Learning](https://arxiv.org/abs/2006.10901) is promising too, as the code should be released at some time.
-This would be even more general, as the sparsity pattern is not constrained, and the performance looks very good, with some smart ad hoc optimizations.  
+This would be even more general, as the sparsity pattern is not constrained, and the performance looks very good, with some smart ad hoc optimizations.
+
+## Basic usage
+  
 
 ## Future work
+- Implement some paper methods (and provide new ones) to optimize the sparse pattern during training, while doing the classic parameter optimization using backprop. The base example is to remove some smaller magnitude weights (or blocks of weights) at some positions and try other ones.  
 - Upgrade to latest CUTLASS version, to optimize speed for latest architectures (using Tensor Cores for example)
-- Use the new Ampere 50% sparse pattern within blocks themselves: more information on the [Hugging Face Blog](https://medium.com/huggingface/sparse-neural-networks-2-n-gpu-performance-b8bc9ce950fc). 
+- Use the new Ampere 50% sparse pattern within blocks themselves: more information on the [Hugging Face Blog](https://medium.com/huggingface/sparse-neural-networks-2-n-gpu-performance-b8bc9ce950fc).
 
 ## Installation
 In the root directory just execute: 

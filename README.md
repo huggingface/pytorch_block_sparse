@@ -74,7 +74,12 @@ This may be improved in next releases, especially when newer version of Cutlass 
 - Use the new Ampere 50% sparse pattern within blocks themselves: more information on the [Hugging Face Blog](https://medium.com/huggingface/sparse-neural-networks-2-n-gpu-performance-b8bc9ce950fc).
 
 ## Installation
-In the root directory just execute: 
+You can just use pip:
+```
+pip install pytorch-block-sparse
+```
+
+Or from sourvce, clone this git repository, and in the root directory just execute: 
 ```
 python setup.py install 
 ```

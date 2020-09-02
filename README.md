@@ -2,7 +2,7 @@
 
 This PyTorch extension provides a **drop-in replacement** for torch.nn.Linear using **block sparse matrices** instead of dense ones.
 
-It enables very easy experimentatio with sparse matrices since you can directly replace Linear layers in your model with sparse ones.
+It enables very easy experimentation with sparse matrices since you can directly replace Linear layers in your model with sparse ones.
 
 ## Motivation
 The goal of this library is to show that **sparse matrices can be used in neural networks**, instead of dense ones, without significantly altering the precision.  
@@ -35,7 +35,7 @@ self.fc = BlockSparseLinear(1024, 256, density=0.1)
 
 ### Secondary usage.
 
-Or you can use a utility called BlockSparseModelPatcher to modify easily an existing model before training it.(you cannot magically sparsify a trained existing model, you will need to train it from scratch)
+Or you can use a utility called BlockSparseModelPatcher to modify easily an existing model before training it (you will need to train it from scratch rather than sparsifying a pre-trained model).
 
 Here is an example with a Roberta Model from Hugging Face ([full example](doc/notebooks/ModelSparsification.ipynb))
 
@@ -60,7 +60,7 @@ print(f"Final model parameters count={model.num_parameters()}")
 # => 68 million parameters instead of 84 million parameters (embeddings are taking a lof of space in Roberta)
 ```
 
-You can use too the provided [notebook](doc/notebooks/01_how_to_train_sparse/01_how_to_train_sparse.ipynb) to train a partially sparse Roberta. 
+You can use the provided [notebook](doc/notebooks/01_how_to_train_sparse/01_how_to_train_sparse.ipynb) to train a partially sparse Roberta. 
 
 ## Performance
 It's notoriously hard to approach cuBLAS performance with custom CUDA kernels.
@@ -87,7 +87,7 @@ This would be even more general, as the sparsity pattern is not constrained, and
   - [Sparse Networks from Scratch: Faster Training without Losing Performance](https://arxiv.org/abs/1907.04840)
   - [Structured Pruning of Large Language Models](https://arxiv.org/abs/1910.04732)
   - [Learning Sparse Neural Networks through L0 Regularization](https://arxiv.org/abs/1712.01312), )
-- Upgrade to latest CUTLASS version, to optimize speed for latest architectures (using Tensor Cores for example)
+- Upgrade to the latest CUTLASS version to optimize speed for the latest architectures (using Tensor Cores for example)
 - Use the new Ampere 50% sparse pattern within blocks themselves: more information on the [Hugging Face Blog](https://medium.com/huggingface/sparse-neural-networks-2-n-gpu-performance-b8bc9ce950fc).
 
 ## Installation

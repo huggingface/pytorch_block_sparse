@@ -33,6 +33,7 @@ This would be even more general, as the sparsity pattern is not constrained, and
 You can use the BlockSparseLinear drop in replacement for torch.nn.Linear in your own model:
 
 ```python
+# from torch.nn import Linear
 from pytorch_block_sparse import BlockSparseLinear
 
 ...

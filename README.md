@@ -1,4 +1,4 @@
-# Block Sparse Matrices for Pytorch v0.1
+# Block Sparse Matrices for Pytorch
 
 This PyTorch extension provides a **drop-in replacement** for torch.nn.Linear using **block sparse matrices** instead of dense ones.
 This allows very easy experimentation, as you just have to replace the Linear layers in your model by a sparse one.

@@ -268,7 +268,7 @@ class BlockSparseMatrix(torch.nn.Module):
                 ret[1] = not ret[1]
             return ret
 
-        warnings.warn(message)
+        #warnings.warn(message)
         return t.contiguous(), False
 
     def reverse_matmul_(self, dense_a, transpose = True):
@@ -320,7 +320,7 @@ class BlockSparseMatrix(torch.nn.Module):
             data_b = data.reshape(-1, block_shape[1]).contiguous()
 
         if not dense_a.is_contiguous():
-            warnings.warn(f"pytorch_block_sparse.BlockSparseMatrix.reverse_matmul: DEGRADED performance, dense_a is not contiguous {dense_a.stride()}")
+            #warnings.warn(f"pytorch_block_sparse.BlockSparseMatrix.reverse_matmul: DEGRADED performance, dense_a is not contiguous {dense_a.stride()}")
             dense_a = dense_a.contiguous()
 
         verbose = False

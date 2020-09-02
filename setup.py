@@ -4,7 +4,7 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 import os
 rootdir = os.path.dirname(os.path.realpath(__file__))
 
-version = "0.1.1"
+version = "0.1.2"
 
 setup(name='pytorch_block_sparse',
       version=version,

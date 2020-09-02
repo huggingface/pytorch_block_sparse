@@ -11,7 +11,7 @@ Sparse matrices theorically allows savings in both space and compute: a **50% sp
 
 However, due to the very optimized nature of cuBLAS based linear layers, it is very hard to reach peak performances with sparse matrices.
 
-In this library we make use of Cutlass to improve the CUDA performances versus a naïve implementation.
+In this library we make use of Cutlass to improve the CUDA performances versus a naive implementation.
 
 In the present stage of the library, the performances for sparse matrices are roughly a factor of 2 slower than their optimized dense counterpart (we hope to improve this in the future). However, the performance gain of using sparse matrices grows with the sparsity, so a **75% sparse matrix** is roughly **2x** faster than the dense equivalent.
 

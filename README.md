@@ -1,16 +1,21 @@
-# Block Sparse Matrices for Pytorch v0.1
+# Fast Block Sparse Matrices for Pytorch v0.1
 
 This PyTorch extension provides a **drop-in replacement** for torch.nn.Linear using **block sparse matrices** instead of dense ones.
-This allows very easy experimentation, as you just have to replace the Linear layers in your model by a sparse one.
+
+This allows very easy experimentatio with sparse matrices since you can directly replace Linear layers in your model with sparse ones.
 
 ## Motivation
-The incentive to create this library is to let people test the idea that **sparse matrices can be used in neural networks**, instead of dense ones, without significantly altering the precision.  
- 
-This would be great news as sparse matrices allows savings in both space and compute: a **50% sparse matrix** will use **only 50% memory**, and theoretically will use only 50% of computation.
-However, due to the very optimized nature of cuBLAS based torch.nn.Linear, this library is slower, by roughly a factor of 2 (this may be improved in the future).
-But the performance gain of using sparse matrices grows with the sparsity, so a **75% sparse matrix** is roughly **2x** faster than the dense equivalent.
+This library was created to let people test **sparse matrices in neural networks** instead of dense ones.  
 
-This could prove useful, and could be combined with other methods like distillation and quantization to reduce further the networks.  
+Sparse matrices theorically allows savings in both space and compute: a **50% sparse matrix** will use **only 50% memory**, and should use only 50% of computation.
+
+However, due to the very optimized nature of cuBLAS based linear layers, it is very hard to reach peak performances with sparse matrices.
+
+In this library we make use of Cutlass to improve the CUDA performances versus a naïve implementation.
+
+In the present stage of the library, the performances for sparse matrices are roughly a factor of 2 slower than their optimized dense counterpart (we hope to improve this in the future). However, the performance gain of using sparse matrices grows with the sparsity, so a **75% sparse matrix** is roughly **2x** faster than the dense equivalent.
+
+Combined with other methods like distillation and quantization this allow to obtain networks which are both smaller and faster!
 
 ## Original code
 This work is based on the [cutlass tilesparse](https://github.com/YulhwaKim/cutlass_tilesparse) proof of concept by [Yulhwa Kim](https://github.com/YulhwaKim).
@@ -54,7 +59,7 @@ print(f"Final model parameters count={model.num_parameters()}")
 
 You can use too the provided [notebook](doc/notebooks/01_how_to_train_sparse/01_how_to_train_sparse.ipynb) to train a partially sparse Roberta. 
 
-##Performance
+## Performance
 It's notoriously hard to approach cuBLAS performance with custom CUDA kernels.
 OpenAI kernels for example make ample use of assembly language to achieve a good performance.
 

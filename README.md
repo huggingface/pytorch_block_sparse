@@ -52,6 +52,8 @@ print(f"Final model parameters count={model.num_parameters()}")
 # => 68 million parameters instead of 84 million parameters (embeddings are taking a lof space in Roberta)
 ```
 
+You can use too the provided [notebook](doc/notebooks/01_how_to_train_sparse/01_how_to_train_sparse.ipynb) to train a partially sparse Roberta. 
+
 ##Performance
 It's notoriously hard to approach cuBLAS performance with custom CUDA kernels.
 OpenAI kernels for example make ample use of assembly language to achieve a good performance.

@@ -37,6 +37,7 @@ class ModelPatcher():
 
     def patch_model(self, model):
         modules = {}
+        modified = False
         for k, v in model.named_modules():
             modules[k] = v
             match, pattern_info = self.pattern_match(k)
@@ -46,6 +47,12 @@ class ModelPatcher():
                 child_name = parts[-1]
                 father = modules[father_module_name]
                 self.replace_module(father, k, child_name, v, pattern_info)
+                modified = True
+        if not modified:
+            print(
+                f"Warning: the patcher did not patch anything ! Check patchable layers with `mp.get_patchable_layers(model)`"
+            )
+
 
 class BlockSparseModelPatcher(ModelPatcher):
     def is_patchable(self, module_name, module, raiseError):

@@ -7,13 +7,11 @@ It enables very easy experimentatio with sparse matrices since you can directly 
 ## Motivation
 The goal of this library is to show that **sparse matrices can be used in neural networks**, instead of dense ones, without significantly altering the precision.  
 
-This is great news as sparse matrices unlock savings in both space and compute: a **50% sparse matrix** will use **only 50% memory**, and theoretically will use only 50% of computation. However, due to the very optimized nature of cuBLAS based torch.nn.Linear, the current version of the library is slower, by roughly a factor of 2 (this may be improved in the future). But the performance gain of using sparse matrices grows with the sparsity, so a **75% sparse matrix** is roughly **2x** faster than the dense equivalent.
-
-However, due to the very optimized nature of cuBLAS based linear layers, it is very hard to reach peak performances with sparse matrices.
-
+This is great news as sparse matrices unlock savings in both space and compute: a **50% sparse matrix** will use **only 50% memory**, and theoretically will use only 50% of computation.
 In this library we make use of Cutlass to improve the CUDA performances versus a naive implementation.
+However, due to the very optimized nature of cuBLAS based torch.nn.Linear, the current version of the library is still slower, by roughly a factor of 2 (this may be improved in the future).
 
-In the present stage of the library, the performances for sparse matrices are roughly a factor of 2 slower than their optimized dense counterpart (we hope to improve this in the future). However, the performance gain of using sparse matrices grows with the sparsity, so a **75% sparse matrix** is roughly **2x** faster than the dense equivalent.
+But the performance gain of using sparse matrices grows with the sparsity, so a **75% sparse matrix** is roughly **2x** faster than the dense equivalent. 
 
 Combined with other methods like distillation and quantization this allow to obtain networks which are both smaller and faster!
 

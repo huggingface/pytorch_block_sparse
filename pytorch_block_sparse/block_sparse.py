@@ -2,6 +2,7 @@ import torch
 import torch.nn
 import numpy
 import warnings
+import math
 
 class BlockSparseMatrix(torch.nn.Module):
     # cols is a list of nonzero block column indexes (int32)
@@ -102,7 +103,6 @@ class BlockSparseMatrix(torch.nn.Module):
 
     @classmethod
     def zeros(cls, shape, n_blocks = None, blocks = None, block_shape=(32, 32), device = "cuda"):
-        assert(str(device).startswith("cuda"))
         for i in range(2):
             if shape[i] % block_shape[i] != 0:
                 raise Exception(f"Invalid shape: shape[{i}]({shape[i]}) %% block_shape[{i}]({block_shape[i]}) is not 0.")
@@ -161,7 +161,7 @@ class BlockSparseMatrix(torch.nn.Module):
         else:
             param_count = ret.data.numel()
             density = block_count / dense_block_count
-            ret.data.copy_(dense.flatten()[:param_count].reshape(ret.data.shape) / density)
+            ret.data.copy_(dense.flatten()[:param_count].reshape(ret.data.shape) / math.sqrt(density))
 
         return ret
 
@@ -353,6 +353,8 @@ class BlockSparseMatrix(torch.nn.Module):
         return result
 
     def reverse_matmul(self, dense_a, transpose):
+        assert(str(self.data.device).startswith("cuda"))
+
         rewritten_a, info_a = self.flatten_first_dims(dense_a)
         ret = self.reverse_matmul_(rewritten_a, transpose = transpose)
 
@@ -397,6 +399,8 @@ class BlockSparseMatrix(torch.nn.Module):
         return data
 
     def matmul_with_output_sparse_support(self, dense_a, dense_b, overwrite_data = False):
+        assert(str(self.data.device).startswith("cuda"))
+
         rewritten_a, info_a = self.flatten_first_dims(dense_a)
         rewritten_b, info_b = self.flatten_first_dims(dense_b)
         assert(info_a == info_b)

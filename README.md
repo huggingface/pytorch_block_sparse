@@ -11,7 +11,8 @@ This is great news as sparse matrices unlock savings in both space and compute: 
 In this library we make use of Cutlass to improve the CUDA performances versus a naive implementation.
 However, due to the very optimized nature of cuBLAS based torch.nn.Linear, the current version of the library is still slower, by roughly a factor of 2 (this may be improved in the future).
 
-But the performance gain of using sparse matrices grows with the sparsity, so a **75% sparse matrix** is roughly **2x** faster than the dense equivalent. 
+In the present stage of the library, the performances for sparse matrices are roughly a factor of 2 slower than their optimized dense counterpart (we hope to improve this in the future). However, the performance gain of using sparse matrices grows with the sparsity, so a **75% sparse matrix** is roughly **2x** faster than the dense equivalent.
+This is a huge improvement on PyTorch sparse matrices: their current implementation is an order of magnitude slower than the dense one.
 
 Combined with other methods like distillation and quantization this allow to obtain networks which are both smaller and faster!
 
@@ -33,9 +34,9 @@ from pytorch_block_sparse import BlockSparseLinear
 self.fc = BlockSparseLinear(1024, 256, density=0.1)
 ```
 
-### Secondary usage.
+## Advanced usage: converting whole models
 
-Or you can use a utility called BlockSparseModelPatcher to modify easily an existing model before training it (you will need to train it from scratch rather than sparsifying a pre-trained model).
+Or you can use a utility called BlockSparseModelPatcher to modify easily an existing model before training it. (you will need to train it from scratch rather than sparsifying a pre-trained model).
 
 Here is an example with a Roberta Model from Hugging Face ([full example](doc/notebooks/ModelSparsification.ipynb))
 

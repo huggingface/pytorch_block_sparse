@@ -9,20 +9,23 @@ from pytorch_block_sparse import BlockSparseModelPatcher
 
 class TestFun(TestCase):
 
-    def helper(self, model, input_tensor, patterns):
+    def helper(self, model, input_tensor, patterns, patch_info):
         for i in range(2):
             if i == 0:
                 mp = BlockSparseModelPatcher()
                 for p in patterns:
-                    mp.add_pattern(p, {"density":0.5})
+                    mp.add_pattern(p, patch_info)
                 mp.patch_model(model)
+            out = model(input_tensor)
 
     def test1(self):
-        linear = torch.nn.Linear(64, 128, False)
-        model = torch.nn.Sequential(linear).cuda()
-        input_tensor = torch.randn(64, 64).cuda()
+        for patch_info in [{"density":0.5}, {"density":0.5, "pseudo_linear":True}]:
+            linear = torch.nn.Linear(64, 128, False)
+            model = torch.nn.Sequential(linear).cuda()
+            input_tensor = torch.randn(64, 64).cuda()
 
-        self.helper(model, input_tensor, ["0"])
+            self.helper(model, input_tensor, ["0"], patch_info)
+
 
     def test0(self):
         config = RobertaConfig(

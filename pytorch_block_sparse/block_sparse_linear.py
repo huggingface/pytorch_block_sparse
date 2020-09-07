@@ -172,3 +172,27 @@ class BlockSparseLinear(nn.Module):
         return x
 
 
+class PseudoBlockSparseLinear(torch.nn.Module):
+    """For debugging purposes mostly: emulate a BlockSparseLinear with only PyTorch primitives."""
+    def __init__(self, block_sparse_linear):
+        super(PseudoBlockSparseLinear, self).__init__()
+
+        block_sparse_matrix = block_sparse_linear.weight.cuda()
+        self.weight = block_sparse_matrix.to_dense()
+        mask = block_sparse_matrix.to_dense(data_replace=torch.ones_like(block_sparse_matrix.data)) == 1
+        self.bias = block_sparse_linear.bias
+
+        self.register_buffer('mask', mask)
+        self.in_features = block_sparse_linear.in_features
+        self.out_features = block_sparse_linear.out_features
+        self.density = mask.sum().item() / (mask.shape[0] * mask.shape[1])
+
+    def forward(self, input):
+        weight = self.weight * self.mask
+        return torch.nn.functional.linear(input, weight, self.bias)
+
+    def extra_repr(self):
+        return 'in_features={}, out_features={}, bias={}, fill_ratio={}'.format(
+            self.in_features, self.out_features, self.bias is not None, self.density
+        )
+

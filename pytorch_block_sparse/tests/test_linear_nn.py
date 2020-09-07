@@ -3,6 +3,7 @@ import torch
 import unittest
 import torch.optim as optim
 from pytorch_block_sparse import BlockSparseLinear
+from pytorch_block_sparse.block_sparse_linear import PseudoBlockSparseLinear
 
 class TestFun(TestCase):
     def test0(self):
@@ -113,7 +114,32 @@ class TestFun(TestCase):
                 with torch.no_grad():
                     dense *= dense_mask
 
+    def test_pseudo_sparse(self):
+        tests = [{"size_a": [256, 64],
+                  "size_b": [64, 128],
+                  "density": 1.0
+                  }
+                 ]
+        verbose = False
+        for test in tests:
 
+            stride = 8
+            size_a = test["size_a"]
+            size_b = test["size_b"]
+            print(f"size_a={size_a}, size_b={size_b}")
+            # Create the sparse linear layer
+            linear = BlockSparseLinear(size_b[0], size_b[1], True, test["density"])
+            with torch.no_grad():
+                linear.weight.data.copy_(linear.weight.data.abs())
+            pseudo_linear = PseudoBlockSparseLinear(linear)
+
+            a1 = torch.randn([size_a[0], size_a[1]]).cuda().abs()
+
+            b1_l = linear(a1)
+
+            b1_pl = pseudo_linear(a1)
+
+            self.assertTrue(torch.isclose(b1_l, b1_pl, rtol=1e-5).all())
 
 
 if __name__ == '__main__':

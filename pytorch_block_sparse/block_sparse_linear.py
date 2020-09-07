@@ -178,9 +178,12 @@ class PseudoBlockSparseLinear(torch.nn.Module):
         super(PseudoBlockSparseLinear, self).__init__()
 
         block_sparse_matrix = block_sparse_linear.weight.cuda()
-        self.weight = block_sparse_matrix.to_dense()
+        self.weight = torch.nn.Parameter(block_sparse_matrix.to_dense())
         mask = block_sparse_matrix.to_dense(data_replace=torch.ones_like(block_sparse_matrix.data)) == 1
-        self.bias = block_sparse_linear.bias
+        if block_sparse_linear.bias is not None:
+            self.bias = torch.nn.Parameter(block_sparse_linear.bias)
+        else:
+            self.register_parameter('bias', None)
 
         self.register_buffer('mask', mask)
         self.in_features = block_sparse_linear.in_features

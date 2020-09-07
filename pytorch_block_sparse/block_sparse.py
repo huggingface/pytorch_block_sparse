@@ -130,7 +130,7 @@ class BlockSparseMatrix(torch.nn.Module):
         positions = torch.tensor(positions, dtype=torch.int64, device = device).sort()[0]
 
         block_mask = torch.zeros(X * Y, dtype=torch.bool, device = device)
-        block_mask[positions] = 1
+        block_mask[positions] = True
         block_mask = block_mask.view(X, Y)
         data = torch.zeros((n_blocks * block_shape[0], block_shape[1]), dtype=torch.float, device = device)
 

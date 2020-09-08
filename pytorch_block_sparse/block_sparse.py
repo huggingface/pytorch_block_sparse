@@ -133,7 +133,7 @@ class BlockSparseMatrix(torch.nn.Module):
         """block_replacements contains tuples : row, col, block_index in self.data"""
         # block positions contains 2d block coordinates
         block_positions = self.build_coo_block_index().long()
-        block_replacements = torch.tensor(block_replacements,dtype=torch.long).to(device=block_positions.device)
+        block_replacements = block_replacements.to(dtype=torch.long).to(device=block_positions.device)
         # Get the column count
         XSIZE, YSIZE = self.blocks_count()
 
@@ -220,10 +220,13 @@ class BlockSparseMatrix(torch.nn.Module):
         return cls(shape, block_mask, data, block_shape)
 
     @classmethod
-    def randn(cls, shape, n_blocks, blocks = None, block_shape=(32, 32), device = "cuda"):
+    def randn(cls, shape, n_blocks, blocks = None, block_shape=(32, 32), device = "cuda", positive = False):
         ret = cls.zeros(shape, n_blocks, blocks, block_shape, device)
         with torch.no_grad():
-            ret.data.normal_()
+            if positive:
+                ret.data.normal_().abs_()
+            else:
+                ret.data.normal_()
         return ret
 
     @classmethod

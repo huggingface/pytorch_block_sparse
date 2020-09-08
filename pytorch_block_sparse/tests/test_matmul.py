@@ -25,11 +25,11 @@ class TestFun(TestCase):
             total_block_count = sizes[1] * sizes[2] / block_size[0] / block_size[1]
             block_count = int(total_block_count * density)
 
-        bsm = BlockSparseMatrix.randn((sizes[2], sizes[1]), block_count, blocks = blocks, block_shape=block_size, device=device)
-
-        # Build positive matrix to easily check results
-        with torch.no_grad():
-            bsm.data.copy_(bsm.data.abs())
+        bsm = BlockSparseMatrix.randn((sizes[2], sizes[1]),
+                                      block_count,
+                                      blocks = blocks, block_shape=block_size,
+                                      device=device,
+                                      positive=True) # Build positive matrix to easily check results
 
         dbsm = bsm.to_dense()
         if verbose:

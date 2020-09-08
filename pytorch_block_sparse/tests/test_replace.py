@@ -74,7 +74,7 @@ class TestFun(TestCase):
                       block_replace=[(3, 1, 0), (2,1,2), (1,1,1)], # row, col, block_index
                       after=dict(row_start_ends_a=[0, 0, 1, 3, 4],
                                  cols_a=[[1, 1],[0, 3],[1, 2],[1, 0]],
-                                 block_mask=[[0, 0],[0,  1],[1,  1],[0,  1]]
+                                 block_mask=[[0,0],[0,1],[1,1],[0,1]]
                                  )
                       ),
                  dict(size=[128, 64],
@@ -86,21 +86,22 @@ class TestFun(TestCase):
                  ]
         block_shape = (32, 32)
         device = "cuda"
-        for test_info in tests:
+        for test_info in tests[:1]:
             size = test_info["size"]
             blocks = test_info["blocks"]
+            block_replace = torch.tensor(test_info["block_replace"])
             bsm = BlockSparseMatrix.randn((size[0], size[1]), None, blocks=blocks, block_shape=block_shape,
-                                          device=device)
+                                          device=device, positive = True)
             bsm.check_ = True
 
-            bsm.to_dense()
+            dbsm0 = bsm.to_dense()
             block_positions = bsm.build_coo_block_index().t()
             for i, b in enumerate(test_info["block_info"]):
                 block_position = tuple(block_positions[i].cpu().numpy())
                 self.assertEqual(b, block_position)
 
             try:
-                bsm.block_replace(test_info["block_replace"])
+                bsm.block_replace(block_replace)
             except Exception as e:
                 if test_info.get("error") == str(e):
                     continue
@@ -115,8 +116,48 @@ class TestFun(TestCase):
 
                 self.assertTrue((r==v).all())
 
-        def test_to_sparse(self):
-            pass
+            dbsm = bsm.to_dense()
+            bsm.check_with_dense(dbsm)
+
+            # Check changed positions
+            bs = block_shape
+            for b in block_replace:
+                block_index = b[2]
+                bp = block_positions[block_index]
+                block0 = dbsm0[bp[0]*bs[0]:(bp[0]+1)*bs[0],
+                               bp[1]*bs[1]:(bp[1]+1)*bs[1]]
+                block = dbsm[b[0]*bs[0]:(b[0]+1)*bs[0],
+                             b[1]*bs[1]:(b[1]+1)*bs[1]]
+
+                self.assertTrue((block0 == block).all())
+
+            # Check unchanged positions
+            for i, b in enumerate(block_positions):
+                if i not in block_replace[:,2]:
+                    bp = b
+                    block0 = dbsm0[bp[0] * bs[0]:(bp[0] + 1) * bs[0],
+                             bp[1] * bs[1]:(bp[1] + 1) * bs[1]]
+                    block = dbsm[b[0] * bs[0]:(b[0] + 1) * bs[0],
+                            b[1] * bs[1]:(b[1] + 1) * bs[1]]
+                    self.assertTrue((block0 == block).all())
+
+            # Check that empty positions are indeed empty
+            block_mask = bsm.block_mask_build(None).repeat_interleave(32,dim=0).repeat_interleave(32, dim=1).float()
+            self.assertEqual((dbsm * (1 - block_mask)).abs().sum(), 0)
+
+            # Part 2: check multiplication behaviour
+            a = torch.randn((1,size[1]), device = bsm.data.device).abs()
+
+            c = bsm.reverse_matmul(a, transpose=True)
+            c_0 = a.matmul(dbsm.t())
+
+            # Basic check
+            all_compare = torch.isclose(c, c_0)
+            if not all_compare.all():
+                #print((all_compare != True).nonzero())
+                #print((c-c_0).abs().max())
+                self.assertTrue(False)
+
 
 
 

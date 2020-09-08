@@ -12,9 +12,6 @@ class BlockSparseMatrix(torch.nn.Module):
         super(BlockSparseMatrix, self).__init__()
         self.int_type = torch.int32
 
-        if block_mask.device != data.device:
-            raise Exception("block_mask and data should have same device, got %s and %s" % (block_mask.device, data.device))
-
         if len(shape) != 2 or shape[0] % 16 != 0 or shape[1] % 16 != 0:
             raise Exception("shape should be a tuple of 2 multiples of 16")
         self.shape = torch.Size(shape)
@@ -22,24 +19,37 @@ class BlockSparseMatrix(torch.nn.Module):
             raise Exception("block_shape should be a tuple of 2 multiples of 16")
         self.block_shape = tuple(block_shape)
 
-        blocks, cols_a, row_start_ends_a, rows_b, col_start_ends_b = self.build_indices(block_mask)
+        self.data = torch.nn.Parameter(data)
+
+        self.rebuild(block_mask)
+
+    def rebuild(self, block_mask, block_shuffle = None):
+        data = self.data
+        block_shape = self.block_shape
+
+        if block_mask.device != data.device:
+            raise Exception("block_mask and data should have same device, got %s and %s" % (block_mask.device, data.device))
+
+        blocks, cols_a, row_start_ends_a, rows_b, col_start_ends_b = self.build_indices(block_mask, block_shuffle)
 
         if len(data.shape) != 2:
             raise Exception("data should be bidimensional, not of shape %s" % data.shape)
         if data.shape[0] != cols_a.shape[0] * block_shape[0]:
-            raise Exception("data.shape[0] (%d) should be equal to cols.shape[0]*block_shape[0] (%d)" % (data.shape[0], cols_a.shape[0] * block_shape[0]))
-        if data.shape[1] !=  block_shape[1]:
-            raise Exception("data.shape[1] (%d) should be equal to block_shape[1] (%d)" % (data.shape[1], block_shape[1]))
+            raise Exception("data.shape[0] (%d) should be equal to cols.shape[0]*block_shape[0] (%d)" % (
+            data.shape[0], cols_a.shape[0] * block_shape[0]))
+        if data.shape[1] != block_shape[1]:
+            raise Exception(
+                "data.shape[1] (%d) should be equal to block_shape[1] (%d)" % (data.shape[1], block_shape[1]))
         if data.dtype != torch.float32:
             raise Exception("data should be float32, not of type %s" % data.dtype)
 
-
-        self.data = torch.nn.Parameter(data)
         for name in ("cols_a", "row_start_ends_a", "rows_b", "col_start_ends_b", "blocks"):
             self.register_buffer(name, locals()[name])
 
         self.sanity_check(self.cols_a, self.row_start_ends_a, self.shape, self.block_shape)
-        self.sanity_check(self.rows_b, self.col_start_ends_b, (self.shape[1], self.shape[0]), (self.block_shape[1], self.block_shape[0]))
+        self.sanity_check(self.rows_b, self.col_start_ends_b, (self.shape[1], self.shape[0]),
+                          (self.block_shape[1], self.block_shape[0]))
+        self.check_ = False
 
     @staticmethod
     def blocks_count_(shape, block_shape):
@@ -48,14 +58,15 @@ class BlockSparseMatrix(torch.nn.Module):
     def blocks_count(self):
         return self.blocks_count_(self.shape, self.block_shape)
 
-    def build_indices_(self, block_mask, nnzt, transpose_indices):
+    def build_indices_(self, block_mask, block_shuffle, nnzt, transpose_indices):
         device = block_mask.device
-        X, Y = self.blocks_count_(self.shape, self.block_shape)
+        X, Y = self.blocks_count()
 
         rows = nnzt[0]
         cols = nnzt[1]
 
-        block_shuffle = torch.arange(0, cols.shape[0], device = device)
+        if block_shuffle == None:
+            block_shuffle = torch.arange(0, cols.shape[0], device = device)
 
         if transpose_indices:
             block_indices = torch.zeros(X*Y, dtype=torch.long, device = device)
@@ -86,13 +97,17 @@ class BlockSparseMatrix(torch.nn.Module):
 
         return cols, row_start_ends
 
-    def build_indices(self, block_mask):
+    def build_indices(self, block_mask, block_shuffle = None):
+        # block_mask is a boolean mask that gives the block places
+        # block_shuffle, if not None, gives the block position in data for each element of cols_a, otherwise
+        # assume that the content of block_shuffle is just from 0..n_blocks
+        # Used to recycle blocks
         nnz = block_mask.nonzero()
         blocks = nnz.flip(-1).flatten().to(dtype=self.int_type)
 
         nnzt = nnz.transpose(0, 1)
-        cols_a, row_start_ends_a = self.build_indices_(block_mask, nnzt, False)
-        rows_b, col_start_ends_b = self.build_indices_(block_mask, nnzt, True)
+        cols_a, row_start_ends_a = self.build_indices_(block_mask, block_shuffle, nnzt, False)
+        rows_b, col_start_ends_b = self.build_indices_(block_mask, block_shuffle, nnzt, True)
 
         verbose = False
 
@@ -101,6 +116,74 @@ class BlockSparseMatrix(torch.nn.Module):
             print(f"col_start_ends_b=\n {self.col_start_ends_b}\nrows_b=\n {self.rows_b}\n")
 
         return blocks, cols_a, row_start_ends_a, rows_b, col_start_ends_b
+
+    def block_norm(self,p=2):
+        d = self.data.reshape(-1, self.block_shape[0], self.block_shape[1])
+        return torch.norm(d, p=p, dim=(1,2), keepdim=False, out=None, dtype=None)
+
+    def block_mask_build(self, block_positions):
+        if block_positions == None:
+            block_positions = self.build_coo_block_index().long()
+        block_mask = torch.zeros(self.blocks_count(), dtype=torch.bool, device=self.data.device)
+
+        block_mask[block_positions[0],block_positions[1]] = True
+        return block_mask
+
+    def block_replace(self, block_replacements):
+        """block_replacements contains tuples : row, col, block_index in self.data"""
+        # block positions contains 2d block coordinates
+        block_positions = self.build_coo_block_index().long()
+        block_replacements = torch.tensor(block_replacements,dtype=torch.long).to(device=block_positions.device)
+        # Get the column count
+        XSIZE, YSIZE = self.blocks_count()
+
+        if self.check_:
+            # Make sure the block in block_replacements were not already assigned a block (block mask should be zero
+            # at this position)
+            # to conserve the one to one mapping between non_zero positions and self.data
+            # Make sure too that new blocks are not mentionned twice in block_replacements
+            # Build the block_mask
+            block_mask0 = self.block_mask_build(block_positions)
+            # Flatten block_mask
+            block_mask = block_mask0.reshape(-1).long()
+
+            # Build flat index of block_replacements
+            new_positions = block_replacements[:,0] * YSIZE + block_replacements[:,1]
+            ones = torch.ones_like(new_positions)
+            # Increase the block count at new_positions -> should be one at most, meaning this position was not
+            # assigned a block before this.
+            block_mask.index_add_(0, new_positions, ones)
+
+            # Check if we do not have a single reference count > 1
+            block_mask = block_mask.reshape(block_mask0.shape)
+
+            argmax = block_mask.argmax()
+            argmax_x, argmax_y = argmax // YSIZE, argmax % YSIZE
+
+            if block_mask[argmax_x, argmax_y] > 1:
+                raise Exception(f"Block position ({argmax_x},{argmax_y}) was already used")
+
+
+        # Do the block replacement
+        replace_index = block_replacements[:,2]
+        replace_data = block_replacements[:,:2].t()
+        block_positions[:, replace_index] = replace_data
+
+        # Build the new block_mask
+        block_mask = self.block_mask_build(block_positions)
+
+        # Create a flat view of the block positions (contiguous in the PyTorch sense)
+        block_positions_indices = block_positions[0] * YSIZE + block_positions[1]
+
+        # Sort the positions
+        _, indices = block_positions_indices.sort()
+
+        # Get the 1D blocks indices in self.data
+        block_shuffle = indices
+
+        # Rebuild all the structures using the block_mask and block_shuffle info
+        self.rebuild(block_mask, block_shuffle)
+
 
     @classmethod
     def zeros(cls, shape, n_blocks = None, blocks = None, block_shape=(32, 32), device = "cuda"):
@@ -190,10 +273,19 @@ class BlockSparseMatrix(torch.nn.Module):
         rows = rows.cumsum(0).to(dtype=self.int_type)
 
         # Trim the last element: it's just a left over
-        rows = rows[:-1]
+        rows = rows[:-1].unsqueeze(-1)
 
         # Build the coo indexes
-        return torch.stack([rows, self.cols_a[:,0]], 0)
+        summary = torch.cat([rows, self.cols_a], -1)
+
+        _, indices = summary[:,2].sort()
+        summary = summary[indices]
+        if self.check_:
+            compare = (summary[:,2] == torch.arange(0, summary.shape[0], device = summary.device))
+            assert(compare.all())
+
+        summary = summary.t()
+        return summary[:2]
 
     def to_sparse(self, data_replace = None):
         coo = self.build_coo_block_index().long()
@@ -407,5 +499,3 @@ class BlockSparseMatrix(torch.nn.Module):
         ret = self.matmul_with_output_sparse_support_(rewritten_a, rewritten_b, overwrite_data)
 
         return ret
-
-

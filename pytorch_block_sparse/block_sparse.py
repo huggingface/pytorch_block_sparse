@@ -23,14 +23,14 @@ class BlockSparseMatrix(torch.nn.Module):
 
         self.rebuild(block_mask)
 
-    def rebuild(self, block_mask, block_shuffle = None):
+    def rebuild(self, block_mask, block_ptr = None):
         data = self.data
         block_shape = self.block_shape
 
         if block_mask.device != data.device:
             raise Exception("block_mask and data should have same device, got %s and %s" % (block_mask.device, data.device))
 
-        blocks, cols_a, row_start_ends_a, rows_b, col_start_ends_b = self.build_indices(block_mask, block_shuffle)
+        blocks, cols_a, row_start_ends_a, rows_b, col_start_ends_b = self.build_indices(block_mask, block_ptr)
 
         if len(data.shape) != 2:
             raise Exception("data should be bidimensional, not of shape %s" % data.shape)
@@ -58,28 +58,25 @@ class BlockSparseMatrix(torch.nn.Module):
     def blocks_count(self):
         return self.blocks_count_(self.shape, self.block_shape)
 
-    def build_indices_(self, block_mask, block_shuffle, nnzt, transpose_indices):
+    def build_indices_(self, block_mask, block_ptr, nnzt, transpose_indices):
         device = block_mask.device
         X, Y = self.blocks_count()
 
         rows = nnzt[0]
         cols = nnzt[1]
 
-        if block_shuffle == None:
-            block_shuffle = torch.arange(0, cols.shape[0], device = device)
-
         if transpose_indices:
             block_indices = torch.zeros(X*Y, dtype=torch.long, device = device)
             positions = rows * Y + cols
             # Set the index of used blocks at the used blocks positions : rest will stay zero
             # Add 1 temporarily to use 0 as a special value
-            block_indices[positions] = block_shuffle + 1
+            block_indices[positions] = block_ptr + 1
             # Reorganize the indexes with transposed ordering
             block_indices = block_indices.reshape(X, Y).t().reshape(X * Y)
             # Only keeps the non zero, and substract 1 to find back the right block index
-            block_shuffle = block_indices[block_indices.nonzero()] - 1
+            block_ptr = block_indices[block_indices.nonzero()] - 1
             # Remove spurious dimension
-            block_shuffle = block_shuffle.squeeze(-1)
+            block_ptr = block_ptr.squeeze(-1)
 
             X, Y = Y, X
 
@@ -93,21 +90,31 @@ class BlockSparseMatrix(torch.nn.Module):
         row_start_ends.index_add_(0, rows + 1, torch.ones(size=(cols.shape[0],), dtype=torch.long, device = device))
         row_start_ends = row_start_ends.cumsum(0).to(dtype=self.int_type)
 
-        cols = torch.stack([cols, block_shuffle], 1).to(dtype=self.int_type)
+        cols = torch.stack([cols, block_ptr], 1).to(dtype=self.int_type)
 
         return cols, row_start_ends
 
-    def build_indices(self, block_mask, block_shuffle = None):
+    def build_indices(self, block_mask, block_ptr = None):
         # block_mask is a boolean mask that gives the block places
-        # block_shuffle, if not None, gives the block position in data for each element of cols_a, otherwise
-        # assume that the content of block_shuffle is just from 0..n_blocks
+        # block_ptr, if not None, gives the block position in data for each element of cols_a, otherwise
+        # assume that the content of block_ptr is just from 0..n_blocks
         # Used to recycle blocks
+
         nnz = block_mask.nonzero()
-        blocks = nnz.flip(-1).flatten().to(dtype=self.int_type)
+
+        if block_ptr == None:
+            block_ptr = torch.arange(0, nnz.shape[0], device=block_mask.device)
+
+        # Sort the nnz according to block_ptr to build the self.blocks
+        # data used by matmul_with_output_sparse_support_
+        _, indices = block_ptr.sort()
+        blocks = nnz[indices]
+
+        blocks = blocks.flip(-1).flatten().to(dtype=self.int_type)
 
         nnzt = nnz.transpose(0, 1)
-        cols_a, row_start_ends_a = self.build_indices_(block_mask, block_shuffle, nnzt, False)
-        rows_b, col_start_ends_b = self.build_indices_(block_mask, block_shuffle, nnzt, True)
+        cols_a, row_start_ends_a = self.build_indices_(block_mask, block_ptr, nnzt, False)
+        rows_b, col_start_ends_b = self.build_indices_(block_mask, block_ptr, nnzt, True)
 
         verbose = False
 
@@ -179,10 +186,10 @@ class BlockSparseMatrix(torch.nn.Module):
         _, indices = block_positions_indices.sort()
 
         # Get the 1D blocks indices in self.data
-        block_shuffle = indices
+        block_ptr = indices
 
-        # Rebuild all the structures using the block_mask and block_shuffle info
-        self.rebuild(block_mask, block_shuffle)
+        # Rebuild all the structures using the block_mask and block_ptr info
+        self.rebuild(block_mask, block_ptr)
 
 
     @classmethod
@@ -468,7 +475,8 @@ class BlockSparseMatrix(torch.nn.Module):
         assert(shape_c[0] == shape_a[1])
         assert(shape_c[1] == shape_b[1])
 
-        blocks_len = self.blocks.shape[0] // 2
+        blocks = self.blocks
+        blocks_len = blocks.shape[0] // 2
         block_shape = self.block_shape
 
         assert ((shape_a[1] % block_shape[1]) == 0)
@@ -489,7 +497,7 @@ class BlockSparseMatrix(torch.nn.Module):
                                                             shape_a[1], shape_b[1], shape_a[0],
                                                             self.block_shape[0], self.block_shape[1],
                                                             data,
-                                                            self.blocks, blocks_len)
+                                                            blocks, blocks_len)
 
         return data
 

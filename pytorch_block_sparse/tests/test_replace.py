@@ -36,6 +36,7 @@ class TestFun(TestCase):
                  ]
         block_shape = (32, 32)
         device = "cuda"
+        verbose = False
         for test_info in tests[:1]:
             size = test_info["size"]
             blocks = test_info["blocks"]
@@ -43,6 +44,11 @@ class TestFun(TestCase):
             bsm = BlockSparseMatrix.randn((size[0], size[1]), None, blocks=blocks, block_shape=block_shape,
                                           device=device, positive = True)
             bsm.check_ = True
+
+            if verbose:
+                print(block_replace)
+                block_mask0 = bsm.block_mask_build(None)
+                print(block_mask0)
 
             dbsm0 = bsm.to_dense()
             block_positions = bsm.build_coo_block_index().t()
@@ -92,7 +98,12 @@ class TestFun(TestCase):
                     self.assertTrue((block0 == block).all())
 
             # Check that empty positions are indeed empty
-            block_mask = bsm.block_mask_build(None).repeat_interleave(32,dim=0).repeat_interleave(32, dim=1).float()
+            block_mask = bsm.block_mask_build(None)
+
+            if verbose:
+                print(block_mask)
+
+            block_mask = block_mask.repeat_interleave(32,dim=0).repeat_interleave(32, dim=1).float()
             self.assertEqual((dbsm * (1 - block_mask)).abs().sum(), 0)
 
             # Part 2: check multiplication behaviour

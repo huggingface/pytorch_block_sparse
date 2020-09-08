@@ -119,6 +119,20 @@ class TestFun(TestCase):
                 #print((c-c_0).abs().max())
                 self.assertTrue(False)
 
+            # Check matmul with sparse support
+            b = torch.randn((1,size[0]), device = bsm.data.device).abs()
+
+            bsm.matmul_with_output_sparse_support(b,a, overwrite_data=True)
+            dbsm_back = bsm.to_dense()
+            dbsm0_back = b.t().mm(a)
+            dbsm0_back = dbsm0_back * bsm.to_dense(data_replace=torch.ones_like(bsm.data))
+
+            self.assertTrue(dbsm0_back.isclose(dbsm_back).all())
+
+
+
+
+
 
 
 

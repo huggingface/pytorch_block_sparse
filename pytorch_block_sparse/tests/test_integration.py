@@ -24,7 +24,7 @@ class TestFun(TestCase):
                 mp.patch_model(model)
             out = model(input_tensor)
 
-    def test1(self):
+    def test0(self):
         density = 0.5
         for bias in [False, True]:
             for patch_info in [{"density":0.5}, {"density":density, "pseudo_linear":True}]:
@@ -44,35 +44,56 @@ class TestFun(TestCase):
 
                 self.helper(model, input_tensor, ["0"], patch_info=patch_info, param_counts=[pc, pc_sparse])
 
+    def roberta_build(self, sparse = False, base_model=None, density = 1.0, eval = True):
+        if base_model == None:
+            config = RobertaConfig(
+                vocab_size=52_000,
+                max_position_embeddings=514,
+                num_attention_heads=12,
+                num_hidden_layers=6,
+                type_vocab_size=1,
+            )
 
-    def test0(self):
-        config = RobertaConfig(
-            vocab_size=52_000,
-            max_position_embeddings=514,
-            num_attention_heads=12,
-            num_hidden_layers=6,
-            type_vocab_size=1,
-        )
+            model = RobertaForMaskedLM(config=config).cuda()
+        else:
+            model = base_model
 
-        model = RobertaForMaskedLM(config=config).cuda()
-        model.eval()
+        if sparse:
+            mp = BlockSparseModelPatcher()
+            mp.add_pattern("roberta\.encoder\.layer\.[0-9]+.intermediate\.dense", {"density": density})
+            mp.add_pattern("roberta\.encoder\.layer\.[0-9]+.output\.dense", {"density": density})
+            mp.patch_model(model)
 
-        verbose = False
+        if eval:
+            model.eval()
 
-        for i in range(2):
-            # => 70 million parameters instead of 84 million parameters when i = 1
-            print("model num parameters", model.num_parameters())
+        return model, model.num_parameters()
 
-            input_ids = torch.tensor([[4, 5, 6, 7]*8]).cuda()
-            input_ids = input_ids.expand((1, 32))
-            out = model(input_ids)
-            if verbose:
-                print(out)
-            if i == 0:
-                mp = BlockSparseModelPatcher()
-                mp.add_pattern("roberta\.encoder\.layer\.[0-9]+.intermediate\.dense", {"density":0.5})
-                mp.add_pattern("roberta\.encoder\.layer\.[0-9]+.output\.dense", {"density":0.5})
-                mp.patch_model(model)
+
+    def test1(self):
+        model0, num_parameters0 = self.roberta_build()
+
+        input_ids = torch.tensor([[4, 5, 6, 7] * 8]).cuda()
+        input_ids = input_ids.expand((1, 32))
+
+        out0 = model0(input_ids)
+
+        model1, num_parameters1 = self.roberta_build(sparse = True, base_model=model0)
+        out1 = model1(input_ids)
+
+        self.assertTrue(torch.isclose(out0[0], out1[0], atol=1e-3).all())
+
+        model2, num_parameters2 = self.roberta_build(sparse=True, density = 0.5, eval=True)
+        model2.eval()
+
+        out2 = model2(input_ids)
+
+        self.assertEqual(num_parameters0, num_parameters1)
+        self.assertGreater(70000000, num_parameters2)
+
+    def test_full(self):
+            pass
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -110,8 +110,11 @@ class BlockSparseLinearFunction(torch.autograd.Function):
         else:
             grad_weight1 = None
 
-        assert(not (grad_weight1 == 0).all())
-        assert(grad_input1.shape == input.shape)
+        if grad_weight1 != None:
+            assert(not (grad_weight1 == 0).all())
+        if grad_input1 != None:
+            assert(grad_input1.shape == input.shape)
+
         return grad_input1, grad_weight1, None
 
 class BlockSparseLinear(nn.Module):

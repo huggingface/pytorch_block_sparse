@@ -54,7 +54,7 @@ class TestFun(TestCase):
 
         sparse_objects = SparseOptimizer.sparse_objects(linear)
 
-        assert(len(sparse_objects) == 1)
+        self.assertEqual(len(sparse_objects), 1)
 
         so = SparseOptimizer(sparse_objects, lr=cleanup_ratio)
 
@@ -79,6 +79,8 @@ class TestFun(TestCase):
         block_count = linear.block_count
         expected_block_changes = int(cleanup_ratio * block_count) * 2
         self.check_differences(linear.weight, dense0, expected_block_changes)
+
+
 
 
 

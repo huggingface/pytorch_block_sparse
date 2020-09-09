@@ -1,10 +1,13 @@
+import os
 import unittest
 from unittest import TestCase
 import torch
-from transformers import RobertaConfig
-from transformers import RobertaForMaskedLM
-from pytorch_block_sparse import BlockSparseModelPatcher
-
+from transformers import RobertaConfig, RobertaForMaskedLM
+from transformers import RobertaTokenizerFast
+from transformers import Trainer, TrainingArguments
+from pytorch_block_sparse import BlockSparseModelPatcher, SparseOptimizer
+import tempfile
+import pathlib
 
 
 class TestFun(TestCase):
@@ -91,8 +94,69 @@ class TestFun(TestCase):
         self.assertEqual(num_parameters0, num_parameters1)
         self.assertGreater(70000000, num_parameters2)
 
-    def test_full(self):
-            pass
+
+    def test_with_trainer(self):
+
+
+        test_dir = pathlib.Path(os.path.dirname(os.path.realpath(__file__)))
+        data_dir = test_dir / "data"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            model, num_parameters = self.roberta_build(sparse=True, density=0.5, eval = False)
+
+            tokenizer = RobertaTokenizerFast.from_pretrained(str(data_dir), max_len=512)
+
+            from transformers import DataCollatorForLanguageModeling
+
+            data_collator = DataCollatorForLanguageModeling(
+                tokenizer=tokenizer, mlm=True, mlm_probability=0.15
+            )
+
+            from transformers import LineByLineTextDataset
+
+            dataset = LineByLineTextDataset(
+                tokenizer=tokenizer,
+                file_path=data_dir / "oscar.eo.small.txt",
+                block_size=128,
+            )
+
+            training_args = TrainingArguments(
+                output_dir=tmpdir,
+                num_train_epochs=1,
+                per_device_train_batch_size=16,  # Adapt it to your size
+                save_steps=10_000
+            )
+
+            import torch.nn as nn
+            from typing import Any, Dict, Union
+
+            class CustomTrainer(Trainer):
+                def training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]) -> torch.Tensor:
+                    if self.first_step:
+                        so.attach_optimizer(self.optimizer)
+                    self.first_step = False
+                    self.sparse_optimizer.step()
+                    ret = super().training_step(model, inputs)
+                    return ret
+
+            trainer = CustomTrainer(
+                model=model,
+                args=training_args,
+                data_collator=data_collator,
+                train_dataset=dataset,
+            )
+
+            cleanup_ratio = 0.1
+            sparse_objects = SparseOptimizer.sparse_objects(model)
+
+            self.assertEqual(len(sparse_objects), 12)
+            so = SparseOptimizer(sparse_objects, lr=cleanup_ratio)
+
+            trainer.sparse_optimizer = so
+            trainer.first_step = True
+
+            trainer.train()
+
 
 
 if __name__ == '__main__':

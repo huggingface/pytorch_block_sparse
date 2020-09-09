@@ -2,6 +2,11 @@ import torch
 import torch.optim as optim
 from pytorch_block_sparse import BlockSparseMatrix
 
+try:
+    import transformers.optimization as transformers_optim
+except:
+    transformers_optim = None
+
 class SparseOptimizerStrategy:
     def run(self, block_sparse_matrix):
         raise NotImplementedError()
@@ -108,6 +113,15 @@ class OptimizerStateUpdater():
         return found
 
 class AdamOptimizerStateUpdater(OptimizerStateUpdater):
+    @staticmethod
+    def is_compatible(optimizer):
+        if isinstance(optimizer, optim.Adam):
+            return True
+
+        if transformers_optim is not None:
+            if isinstance(optimizer, transformers_optim.AdamW):
+                return True
+
     def update_state_data(self, param, state_keep_mask):
         opt = self.optimizer
 
@@ -218,9 +232,11 @@ class SparseOptimizer(torch.optim.Optimizer):
         if len(self.attached_optimizers) != 0:
             found = False
             for optimizer in self.attached_optimizers:
-                if isinstance(optimizer, optim.Adam):
+                if AdamOptimizerStateUpdater.is_compatible(optimizer):
                     updater = AdamOptimizerStateUpdater(optimizer, p)
                     found = found or updater.update_state(state_keep_mask)
+                else:
+                    raise Exception(f"unsupported optimizer {optimizer.__class__}")
 
             if not found:
                 raise Exception(f"Could not find sparse object {p} in optimizers {self.attached_optimizers}")

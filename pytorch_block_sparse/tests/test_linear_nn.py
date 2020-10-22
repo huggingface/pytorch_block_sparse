@@ -1,21 +1,19 @@
-from unittest import TestCase
-import torch
 import unittest
+from unittest import TestCase
+
+import torch
 import torch.optim as optim
+
 from pytorch_block_sparse import BlockSparseLinear
 from pytorch_block_sparse.block_sparse_linear import PseudoBlockSparseLinear
 
+
 class TestFun(TestCase):
     def test0(self):
-        tests = [{"size_a": [32, 32],
-                  "size_b": [32, 32],
-                  "density": 1.0
-                  },
-                 {"size_a": [256, 32],
-                  "size_b": [32, 32],
-                  "density": 1.0
-                  }
-                 ]
+        tests = [
+            {"size_a": [32, 32], "size_b": [32, 32], "density": 1.0},
+            {"size_a": [256, 32], "size_b": [32, 32], "density": 1.0},
+        ]
         verbose = False
         for test in tests:
             lr = 0.001
@@ -27,7 +25,7 @@ class TestFun(TestCase):
             # Create the sparse linear layer
             linear = BlockSparseLinear(size_b[0], size_b[1], True, test["density"])
             if verbose:
-                print(linear.weight.data[::stride,::stride])
+                print(linear.weight.data[::stride, ::stride])
 
             # TODO : this does nothing
             linear.cuda()
@@ -42,7 +40,7 @@ class TestFun(TestCase):
             if verbose:
                 print("dense\n", dense[::stride, ::stride])
 
-            optimizer0 = optim.Adam([a1]+list(linear.parameters()), lr=lr)
+            optimizer0 = optim.Adam([a1] + list(linear.parameters()), lr=lr)
             optimizer1 = optim.Adam([a2, dense, bias], lr=lr)
 
             for i in range(40):
@@ -88,8 +86,8 @@ class TestFun(TestCase):
 
                 if verbose:
                     print("a_grad\n", a_grad[::stride, ::stride])
-                    print("a1 grad\n", a1.grad[::stride,::stride])
-                    print("a2 grad\n", a2.grad[::stride,::stride])
+                    print("a1 grad\n", a1.grad[::stride, ::stride])
+                    print("a2 grad\n", a2.grad[::stride, ::stride])
 
                     print(linear.weight.data.grad)
 
@@ -99,14 +97,16 @@ class TestFun(TestCase):
                 dense_grad_reference = dense.grad * dense_mask
 
                 if verbose:
-                    print("dense_grad\n", dense_grad[::stride,::stride])
-                    print("dense_grad_reference\n", dense_grad_reference[::stride,::stride])
+                    print("dense_grad\n", dense_grad[::stride, ::stride])
+                    print(
+                        "dense_grad_reference\n",
+                        dense_grad_reference[::stride, ::stride],
+                    )
 
                 s = dense_grad.isclose(dense_grad_reference, atol=1e-05).all()
 
                 if not s:
                     raise Exception("Weight gradients are differents")
-
 
                 optimizer0.step()
                 optimizer1.step()
@@ -115,15 +115,8 @@ class TestFun(TestCase):
                     dense *= dense_mask
 
     def test_pseudo_sparse(self):
-        tests = [{"size_a": [256, 64],
-                  "size_b": [64, 128],
-                  "density": 1.0
-                  }
-                 ]
-        verbose = False
+        tests = [{"size_a": [256, 64], "size_b": [64, 128], "density": 1.0}]
         for test in tests:
-
-            stride = 8
             size_a = test["size_a"]
             size_b = test["size_b"]
             print(f"size_a={size_a}, size_b={size_b}")
@@ -142,9 +135,5 @@ class TestFun(TestCase):
             self.assertTrue(torch.isclose(b1_l, b1_pl, rtol=1e-5).all())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-
-
-
-

@@ -1,15 +1,18 @@
-from unittest import TestCase
 import unittest
-from pytorch_block_sparse import BlockSparseMatrix, SparseOptimizer, BlockSparseLinear
-from pytorch_block_sparse.sparse_optimizer import MagnitudeSparseOptimizerStrategy
+from unittest import TestCase
+
 import torch
 import torch.optim as optim
+
+from pytorch_block_sparse import BlockSparseLinear, BlockSparseMatrix, SparseOptimizer
+from pytorch_block_sparse.sparse_optimizer import MagnitudeSparseOptimizerStrategy
+
 
 class TestFun(TestCase):
     def check_differences(self, bsm, reference_dense, expected_block_changes):
         dense = bsm.to_dense()
 
-        differences = (reference_dense != dense)
+        differences = reference_dense != dense
         block_shape = bsm.block_shape
         differences = float(differences.float().sum() / (block_shape[0] * block_shape[1]))
 
@@ -19,7 +22,7 @@ class TestFun(TestCase):
         size = (256, 256)
         block_count = 32
         cleanup_ratio = 0.1
-        block_shape = (32,32)
+        block_shape = (32, 32)
         bsm = BlockSparseMatrix.randn(size, block_count, block_shape=block_shape, device="cuda")
 
         dense0 = bsm.to_dense()
@@ -81,9 +84,5 @@ class TestFun(TestCase):
         self.check_differences(linear.weight, dense0, expected_block_changes)
 
 
-
-
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

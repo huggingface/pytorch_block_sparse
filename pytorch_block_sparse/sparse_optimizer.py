@@ -1,11 +1,13 @@
 import torch
 import torch.optim as optim
+
 from pytorch_block_sparse import BlockSparseMatrix
 
 try:
     import transformers.optimization as transformers_optim
-except:
+except Exception:
     transformers_optim = None
+
 
 class SparseOptimizerStrategy:
     def run(self, block_sparse_matrix):
@@ -13,7 +15,12 @@ class SparseOptimizerStrategy:
 
 
 class MagnitudeSparseOptimizerStrategy(SparseOptimizerStrategy):
-    def __init__(self, cleanup_ratio, new_coefficients_distribution ="uniform", new_coefficients_scale=0.1):
+    def __init__(
+        self,
+        cleanup_ratio,
+        new_coefficients_distribution="uniform",
+        new_coefficients_scale=0.1,
+    ):
         self.cleanup_ratio = cleanup_ratio
         self.new_coefficients_distribution = new_coefficients_distribution
         self.new_coefficients_scale = new_coefficients_scale
@@ -22,7 +29,10 @@ class MagnitudeSparseOptimizerStrategy(SparseOptimizerStrategy):
         mean, std = old_data.mean(), old_data.std()
 
         if self.new_coefficients_distribution == "gaussian":
-            new_data.normal_(mean=mean * self.new_coefficients_scale, std=std * self.new_coefficients_scale)
+            new_data.normal_(
+                mean=mean * self.new_coefficients_scale,
+                std=std * self.new_coefficients_scale,
+            )
         elif self.new_coefficients_distribution == "uniform":
             new_data.random_(0, 1)
             new_data -= 0.5
@@ -39,14 +49,14 @@ class MagnitudeSparseOptimizerStrategy(SparseOptimizerStrategy):
         _, indices = norms.sort()
 
         # Extract the worst blocks
-        bad_blocks = indices[:int(indices.shape[0] * self.cleanup_ratio)]
+        bad_blocks = indices[: int(indices.shape[0] * self.cleanup_ratio)]
 
         # Find available positions
-        block_mask = ~ bsm.block_mask_build(None)
+        block_mask = ~bsm.block_mask_build(None)
         available = block_mask.nonzero()
 
         # Extract some random position
-        empty_positions_indices = torch.randperm(available.shape[0])[:bad_blocks.shape[0]]
+        empty_positions_indices = torch.randperm(available.shape[0])[: bad_blocks.shape[0]]
         new_positions = available[empty_positions_indices]
 
         block_replacements = torch.cat([new_positions, bad_blocks.unsqueeze(-1)], -1)
@@ -54,7 +64,11 @@ class MagnitudeSparseOptimizerStrategy(SparseOptimizerStrategy):
         bsm.block_replace(block_replacements)
 
         # bad_blocks
-        new_block_mask = torch.zeros(bsm.data.shape[0] // bsm.block_shape[0], dtype=torch.bool, device = bsm.data.device)
+        new_block_mask = torch.zeros(
+            bsm.data.shape[0] // bsm.block_shape[0],
+            dtype=torch.bool,
+            device=bsm.data.device,
+        )
 
         new_block_mask[bad_blocks] = True
 
@@ -77,16 +91,18 @@ class MagnitudeSparseOptimizerStrategy(SparseOptimizerStrategy):
 
         return state_keep_mask
 
+
 class _RequiredParameter(object):
     """Singleton class representing a required parameter for an Optimizer."""
 
     def __repr__(self):
         return "<required parameter>"
 
+
 required = _RequiredParameter()
 
 
-class OptimizerStateUpdater():
+class OptimizerStateUpdater:
     def __init__(self, optimizer, sparse_object):
         self.optimizer = optimizer
         if not isinstance(sparse_object, BlockSparseMatrix):
@@ -112,6 +128,7 @@ class OptimizerStateUpdater():
 
         return found
 
+
 class AdamOptimizerStateUpdater(OptimizerStateUpdater):
     @staticmethod
     def is_compatible(optimizer):
@@ -128,31 +145,50 @@ class AdamOptimizerStateUpdater(OptimizerStateUpdater):
         param_state = opt.state[param]
 
         for key in param_state:
-            if key in ['exp_avg', 'exp_avg_sq', 'max_exp_avg_sq']:
+            if key in ["exp_avg", "exp_avg_sq", "max_exp_avg_sq"]:
                 param_state[key] *= state_keep_mask
-            elif key == 'step':
+            elif key == "step":
                 # We cannot really alter the step info, it's global, so the bias_correction1 and bias_correction2 may
                 # not be completely correct for the new coefficients, but it should not be a big issue
                 pass
             else:
                 raise Exception(f"Unknown key in Adam parameter state {key}")
 
+
 class SparseOptimizer(torch.optim.Optimizer):
     METHODS = ["magnitude"]
     COEFFICIENTS_DISTRIBUTION = ["uniform", "gaussian"]
-    allowed_keys = {"lr", "method", "new_coefficients_scale", "new_coefficients_distribution"}
-    """optimizer = sparse_cleaner.SparseOptimizer([BlockSparseMatrix,BlockSparseMatrix], method="magnitude", new_coefficients_distribution="uniform")
-       optimizer.add_param_group(dict(sparse_objects=[BlockSparseMatrix], lr=0.5,  method="magnitude", new_coefficients_distribution="gaussian", new_coefficients_scale = 1.0))"""
-    def __init__(self, sparse_objects, lr=1e-1, method="magnitude", new_coefficients_scale = 0.1, new_coefficients_distribution="uniform"):
+    allowed_keys = {
+        "lr",
+        "method",
+        "new_coefficients_scale",
+        "new_coefficients_distribution",
+    }
+    """optimizer = sparse_cleaner.SparseOptimizer([BlockSparseMatrix,BlockSparseMatrix],
+                                                  method="magnitude", new_coefficients_distribution="uniform")
+       optimizer.add_param_group(dict(sparse_objects=[BlockSparseMatrix],
+                                      lr=0.5,  method="magnitude",
+                                       new_coefficients_distribution="gaussian", new_coefficients_scale = 1.0))"""
+
+    def __init__(
+        self,
+        sparse_objects,
+        lr=1e-1,
+        method="magnitude",
+        new_coefficients_scale=0.1,
+        new_coefficients_distribution="uniform",
+    ):
         if not 0.0 < lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
 
-        defaults = dict(lr=lr,
-                        method=method,
-                        new_coefficients_scale=new_coefficients_scale,
-                        new_coefficients_distribution=new_coefficients_distribution)
+        defaults = dict(
+            lr=lr,
+            method=method,
+            new_coefficients_scale=new_coefficients_scale,
+            new_coefficients_distribution=new_coefficients_distribution,
+        )
 
-        super(SparseOptimizer, self).__init__([{"sparse_objects":sparse_objects}], defaults)
+        super(SparseOptimizer, self).__init__([{"sparse_objects": sparse_objects}], defaults)
         self.attached_optimizers = []
 
     @staticmethod
@@ -179,14 +215,14 @@ class SparseOptimizer(torch.optim.Optimizer):
             elif k not in self.allowed_keys:
                 raise Exception("Unknown cleaning parameter %s" % k)
 
-        sparse_objects = sparse_objects_group['sparse_objects']
+        sparse_objects = sparse_objects_group["sparse_objects"]
 
         if isinstance(sparse_objects, BlockSparseMatrix):
-            sparse_objects_group['sparse_objects'] = [sparse_objects]
+            sparse_objects_group["sparse_objects"] = [sparse_objects]
         else:
-            sparse_objects_group['sparse_objects'] = list(sparse_objects)
+            sparse_objects_group["sparse_objects"] = list(sparse_objects)
 
-        sparse_objects = sparse_objects_group['sparse_objects']
+        sparse_objects = sparse_objects_group["sparse_objects"]
 
         for p in sparse_objects:
             if isinstance(p, BlockSparseMatrix):
@@ -196,8 +232,7 @@ class SparseOptimizer(torch.optim.Optimizer):
 
         for name, default in self.defaults.items():
             if default is required and name not in sparse_objects_group:
-                raise ValueError("parameter group didn't specify a value of required optimization parameter " +
-                                 name)
+                raise ValueError("parameter group didn't specify a value of required optimization parameter " + name)
             else:
                 sparse_objects_group.setdefault(name, default)
 
@@ -205,25 +240,36 @@ class SparseOptimizer(torch.optim.Optimizer):
             raise Exception(f"Invalid Method {sparse_objects_group['method']}")
 
         if sparse_objects_group["new_coefficients_distribution"] not in self.COEFFICIENTS_DISTRIBUTION:
-            raise Exception(f"Invalid new coefficients distribution {sparse_objects_group['new_coefficients_distribution']}")
+            raise Exception(
+                f"Invalid new coefficients distribution {sparse_objects_group['new_coefficients_distribution']}"
+            )
 
         param_set = set()
         for group in self.param_groups:
-            param_set.update(set(group['sparse_objects']))
+            param_set.update(set(group["sparse_objects"]))
 
-        if not param_set.isdisjoint(set(sparse_objects_group['sparse_objects'])):
+        if not param_set.isdisjoint(set(sparse_objects_group["sparse_objects"])):
             raise ValueError("some parameters appear in more than one parameter group")
 
         self.param_groups.append(sparse_objects_group)
 
-    def clean(self, p, method, clean_ratio, new_coefficients_scale, new_coefficients_distribution):
+    def clean(
+        self,
+        p,
+        method,
+        clean_ratio,
+        new_coefficients_scale,
+        new_coefficients_distribution,
+    ):
         if not isinstance(p, BlockSparseMatrix):
             raise Exception("I don't know how to clean this : %s" % p)
 
         if method == "magnitude":
-            cleaner = MagnitudeSparseOptimizerStrategy(clean_ratio,
-                                                       new_coefficients_distribution =new_coefficients_distribution,
-                                                       new_coefficients_scale=new_coefficients_scale)
+            cleaner = MagnitudeSparseOptimizerStrategy(
+                clean_ratio,
+                new_coefficients_distribution=new_coefficients_distribution,
+                new_coefficients_scale=new_coefficients_scale,
+            )
         else:
             raise Exception(f"Unknowncleaning method {method}")
 
@@ -245,14 +291,14 @@ class SparseOptimizer(torch.optim.Optimizer):
 
     def step(self):
         for group in self.param_groups:
-            clean_ratio = group['lr']
+            clean_ratio = group["lr"]
             if clean_ratio == 0.0:
                 continue
-            for p in group['sparse_objects']:
-                self.clean(p,
-                           clean_ratio = clean_ratio,
-                           method=group['method'],
-                           new_coefficients_scale=group['new_coefficients_scale'],
-                           new_coefficients_distribution=group['new_coefficients_distribution'],
-                           )
-
+            for p in group["sparse_objects"]:
+                self.clean(
+                    p,
+                    clean_ratio=clean_ratio,
+                    method=group["method"],
+                    new_coefficients_scale=group["new_coefficients_scale"],
+                    new_coefficients_distribution=group["new_coefficients_distribution"],
+                )

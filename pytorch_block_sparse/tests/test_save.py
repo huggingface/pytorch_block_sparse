@@ -1,15 +1,18 @@
-import torch
+import tempfile
 import unittest
 from unittest import TestCase
-import tempfile
-from pytorch_block_sparse import BlockSparseMatrix, BlockSparseLinear
+
+import torch
+
+from pytorch_block_sparse import BlockSparseLinear, BlockSparseMatrix
+
 
 class TestFun(TestCase):
     def test0(self):
         sizes = [64, 64]
         block_size = (32, 32)
         block_count = 2
-        bsm = BlockSparseMatrix.randn(sizes, block_count, blocks = None, block_shape=block_size, device="cuda")
+        bsm = BlockSparseMatrix.randn(sizes, block_count, blocks=None, block_shape=block_size, device="cuda")
 
         with tempfile.NamedTemporaryFile() as tf:
             torch.save(bsm, tf.name)
@@ -64,5 +67,5 @@ class TestFun(TestCase):
             self.assertTrue((linear.bias == linear2.bias).all())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

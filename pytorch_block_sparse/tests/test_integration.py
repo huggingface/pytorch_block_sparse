@@ -1,17 +1,24 @@
 import os
-import unittest
-from unittest import TestCase
-import torch
-from transformers import RobertaConfig, RobertaForMaskedLM
-from transformers import RobertaTokenizerFast
-from transformers import Trainer, TrainingArguments
-from pytorch_block_sparse import BlockSparseModelPatcher, SparseOptimizer
-import tempfile
 import pathlib
+import tempfile
+import unittest
+from typing import Any, Dict, Union
+from unittest import TestCase
+
+import torch
+import torch.nn as nn
+from transformers import (
+    RobertaConfig,
+    RobertaForMaskedLM,
+    RobertaTokenizerFast,
+    Trainer,
+    TrainingArguments,
+)
+
+from pytorch_block_sparse import BlockSparseModelPatcher, SparseOptimizer
 
 
 class TestFun(TestCase):
-
     def helper(self, model, input_tensor, patterns, patch_info, param_counts):
         for i in range(2):
             parameter_count = 0
@@ -25,12 +32,15 @@ class TestFun(TestCase):
                 for p in patterns:
                     mp.add_pattern(p, patch_info)
                 mp.patch_model(model)
-            out = model(input_tensor)
+            _ = model(input_tensor)
 
     def test0(self):
         density = 0.5
         for bias in [False, True]:
-            for patch_info in [{"density":0.5}, {"density":density, "pseudo_linear":True}]:
+            for patch_info in [
+                {"density": 0.5},
+                {"density": density, "pseudo_linear": True},
+            ]:
                 linear = torch.nn.Linear(64, 128, bias)
                 model = torch.nn.Sequential(linear).cuda()
                 input_tensor = torch.randn(64, 64).cuda()
@@ -45,10 +55,16 @@ class TestFun(TestCase):
                     pc += linear.bias.numel()
                     pc_sparse += linear.bias.numel()
 
-                self.helper(model, input_tensor, ["0"], patch_info=patch_info, param_counts=[pc, pc_sparse])
+                self.helper(
+                    model,
+                    input_tensor,
+                    ["0"],
+                    patch_info=patch_info,
+                    param_counts=[pc, pc_sparse],
+                )
 
-    def roberta_build(self, sparse = False, base_model=None, density = 1.0, eval = True):
-        if base_model == None:
+    def roberta_build(self, sparse=False, base_model=None, density=1.0, eval=True):
+        if base_model is None:
             config = RobertaConfig(
                 vocab_size=52_000,
                 max_position_embeddings=514,
@@ -63,15 +79,17 @@ class TestFun(TestCase):
 
         if sparse:
             mp = BlockSparseModelPatcher()
-            mp.add_pattern("roberta\.encoder\.layer\.[0-9]+.intermediate\.dense", {"density": density})
-            mp.add_pattern("roberta\.encoder\.layer\.[0-9]+.output\.dense", {"density": density})
+            mp.add_pattern(
+                "roberta\\.encoder\\.layer\\.[0-9]+.intermediate\\.dense",
+                {"density": density},
+            )
+            mp.add_pattern("roberta\\.encoder\\.layer\\.[0-9]+.output\\.dense", {"density": density})
             mp.patch_model(model)
 
         if eval:
             model.eval()
 
         return model, model.num_parameters()
-
 
     def test1(self):
         model0, num_parameters0 = self.roberta_build()
@@ -81,36 +99,31 @@ class TestFun(TestCase):
 
         out0 = model0(input_ids)
 
-        model1, num_parameters1 = self.roberta_build(sparse = True, base_model=model0)
+        model1, num_parameters1 = self.roberta_build(sparse=True, base_model=model0)
         out1 = model1(input_ids)
 
         self.assertTrue(torch.isclose(out0[0], out1[0], atol=1e-3).all())
 
-        model2, num_parameters2 = self.roberta_build(sparse=True, density = 0.5, eval=True)
+        model2, num_parameters2 = self.roberta_build(sparse=True, density=0.5, eval=True)
         model2.eval()
 
-        out2 = model2(input_ids)
+        _ = model2(input_ids)
 
         self.assertEqual(num_parameters0, num_parameters1)
         self.assertGreater(70000000, num_parameters2)
 
-
     def test_with_trainer(self):
-
-
         test_dir = pathlib.Path(os.path.dirname(os.path.realpath(__file__)))
         data_dir = test_dir / "data"
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            model, num_parameters = self.roberta_build(sparse=True, density=0.5, eval = False)
+            model, num_parameters = self.roberta_build(sparse=True, density=0.5, eval=False)
 
             tokenizer = RobertaTokenizerFast.from_pretrained(str(data_dir), max_len=512)
 
             from transformers import DataCollatorForLanguageModeling
 
-            data_collator = DataCollatorForLanguageModeling(
-                tokenizer=tokenizer, mlm=True, mlm_probability=0.15
-            )
+            data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, mlm_probability=0.15)
 
             from transformers import LineByLineTextDataset
 
@@ -124,11 +137,8 @@ class TestFun(TestCase):
                 output_dir=tmpdir,
                 num_train_epochs=1,
                 per_device_train_batch_size=16,  # Adapt it to your size
-                save_steps=10_000
+                save_steps=10_000,
             )
-
-            import torch.nn as nn
-            from typing import Any, Dict, Union
 
             class CustomTrainer(Trainer):
                 def training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]) -> torch.Tensor:
@@ -158,6 +168,5 @@ class TestFun(TestCase):
             trainer.train()
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

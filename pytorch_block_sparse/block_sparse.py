@@ -25,6 +25,9 @@ class BlockSparseMatrixBase(torch.nn.Module):
 
         self.rebuild(block_mask)
 
+    def get_differentiable_data(self):
+        return self.data
+
     def rebuild(self, block_mask, block_ptr = None):
         data = self.data
         block_shape = self.block_shape
@@ -526,3 +529,27 @@ class BlockSparseMatrix(BlockSparseMatrixBase):
             raise Exception("block_shape should be a tuple of 2 multiples of 32")
 
         super(BlockSparseMatrix, self).__init__(shape, block_mask, data, block_shape)
+
+class BlockSparseMatrixEmulator(BlockSparseMatrixBase):
+    # cols is a list of nonzero block column indexes (int32)
+    # row_start is a index into cols (int32)
+    # Data is (len(cols), block_shape, block_shape)
+    def __init__(self, shape, block_mask, data, block_shape):
+        super(BlockSparseMatrixEmulator, self).__init__(shape, block_mask, data, block_shape)
+
+    def get_differentiable_data(self):
+        return self.dense_
+
+    def rebuild(self, block_mask, block_ptr=None):
+        super().rebuild(block_mask, block_ptr)
+        self._dense = self.to_dense()
+        self._mask = self.to_dense(data_replace=torch.ones_like(self.data)) == 1
+
+    def reverse_matmul(self, dense_a, transpose):
+        m = self._dense.t() if transpose else self._dense
+        return dense_a.matmul(m * self._mask) # The self._mask multiplication is not really needed, but ...
+
+    def matmul_with_output_sparse_support(self, dense_a, dense_b, overwrite_data=False):
+        """Compute  c = a.t().mm(b) where c is sparse (we just keep the results where c is non_zero)."""
+        return dense_a.t().mm(dense_b) * self._mask
+

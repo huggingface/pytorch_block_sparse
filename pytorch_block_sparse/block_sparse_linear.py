@@ -169,7 +169,7 @@ class BlockSparseLinear(nn.Module):
             self.register_parameter('bias', None)
 
     def forward(self, x):
-        x = self.fn(x, self.weight.data, self.weight)
+        x = self.fn(x, self.weight.get_differentiable_data(), self.weight)
         if self.bias is not None:
             x = x + self.bias
         return x

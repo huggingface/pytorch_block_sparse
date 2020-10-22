@@ -4,19 +4,21 @@ import numpy
 import warnings
 import math
 
-class BlockSparseMatrix(torch.nn.Module):
+class BlockSparseMatrixBase(torch.nn.Module):
     # cols is a list of nonzero block column indexes (int32)
     # row_start is a index into cols (int32)
     # Data is (len(cols), block_shape, block_shape)
-    def __init__(self, shape, block_mask, data, block_shape=(16, 16)):
-        super(BlockSparseMatrix, self).__init__()
+    def __init__(self, shape, block_mask, data, block_shape=(32, 32)):
+        super(BlockSparseMatrixBase, self).__init__()
         self.int_type = torch.int32
 
-        if len(shape) != 2 or shape[0] % 16 != 0 or shape[1] % 16 != 0:
-            raise Exception("shape should be a tuple of 2 multiples of 16")
+        if len(shape) != 2:
+            raise Exception("shape should be a tuple of 2 ints")
+
         self.shape = torch.Size(shape)
-        if len(block_shape) != 2 or block_shape[0] % 16 != 0 or block_shape[1] % 16 != 0:
-            raise Exception("block_shape should be a tuple of 2 multiples of 16")
+        if len(block_shape) != 2:
+            raise Exception("block_shape should be a tuple of 2 ints")
+
         self.block_shape = tuple(block_shape)
 
         self.data = torch.nn.Parameter(data)
@@ -74,7 +76,7 @@ class BlockSparseMatrix(torch.nn.Module):
             # Reorganize the indexes with transposed ordering
             block_indices = block_indices.reshape(X, Y).t().reshape(X * Y)
             # Only keeps the non zero, and substract 1 to find back the right block index
-            block_ptr = block_indices[block_indices.nonzero()] - 1
+            block_ptr = block_indices[torch.nonzero(block_indices, as_tuple=False)] - 1
             # Remove spurious dimension
             block_ptr = block_ptr.squeeze(-1)
 
@@ -82,7 +84,7 @@ class BlockSparseMatrix(torch.nn.Module):
 
             rows = cols
 
-            nnztt = block_mask.t().nonzero()
+            nnztt = torch.nonzero(block_mask.t(), as_tuple=False)
             cols = nnztt[:,1]
 
         row_start_ends = torch.zeros((X + 1,), dtype=torch.long, device = device)
@@ -100,7 +102,7 @@ class BlockSparseMatrix(torch.nn.Module):
         # assume that the content of block_ptr is just from 0..n_blocks
         # Used to recycle blocks
 
-        nnz = block_mask.nonzero()
+        nnz = torch.nonzero(block_mask, as_tuple=False)
 
         if block_ptr == None:
             block_ptr = torch.arange(0, nnz.shape[0], device=block_mask.device)
@@ -510,3 +512,17 @@ class BlockSparseMatrix(torch.nn.Module):
         ret = self.matmul_with_output_sparse_support_(rewritten_a, rewritten_b, overwrite_data)
 
         return ret
+
+
+class BlockSparseMatrix(BlockSparseMatrixBase):
+    # cols is a list of nonzero block column indexes (int32)
+    # row_start is a index into cols (int32)
+    # Data is (len(cols), block_shape, block_shape)
+    def __init__(self, shape, block_mask, data, block_shape=(32, 32)):
+        if len(shape) != 2 or shape[0] % 32 != 0 or shape[1] % 32 != 0:
+            raise Exception("shape should be a tuple of 2 multiples of 32")
+
+        if len(block_shape) != 2 or block_shape[0] % 32 != 0 or block_shape[1] % 32 != 0:
+            raise Exception("block_shape should be a tuple of 2 multiples of 32")
+
+        super(BlockSparseMatrix, self).__init__(shape, block_mask, data, block_shape)

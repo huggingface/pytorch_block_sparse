@@ -1,6 +1,6 @@
 include README.md
-graft pytorch_block_sparse/cutlass/*.h
-graft pytorch_block_sparse/native/*.h
-graft pytorch_block_sparse/tests/.py
+graft pytorch_block_sparse/cutlass/
+graft pytorch_block_sparse/native/
+graft pytorch_block_sparse/tests/
 global-exclude *.py[cod]
 global-exclude *~

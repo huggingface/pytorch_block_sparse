@@ -1,9 +1,8 @@
 from unittest import TestCase
 
-from pytorch_block_sparse.block_sparse import (
-    BlockSparseMatrix,
-    BlockSparseMatrixEmulator,
-)
+import torch
+
+from pytorch_block_sparse import BlockSparseMatrix, BlockSparseMatrixEmulator
 
 
 class TestFun(TestCase):
@@ -35,9 +34,36 @@ class TestFun(TestCase):
 
     def test0(self):
         d = dict
-        test_sizes = [d(nb=2, s=(3, 5), bs=(1, 1))]
+        test_sizes = [d(nb=2, s=(4, 8), bs=(1, 4))]
         map = d(nb="n_blocks", s="shape", bs="block_shape")
 
         for ts in test_sizes:
             ts = {map[k]: v for k, v in ts.items()}
             self.help_randn(**ts, device="cpu")
+
+    def test_from_dense(self):
+        dense = torch.randn(8, 8).cuda()
+        d = dict
+
+        tests = [
+            d(blocks=[[0, 0], [1, 3], [3, 2]], block_shape=(1, 2)),
+            d(blocks=[[0, 0], [1, 1], [3, 1]], block_shape=(2, 4)),
+            d(block_shape=(2, 4)),
+        ]
+
+        for test in tests:
+            blocks = test.get("blocks")
+            nblocks = test.get("nblocks")
+            block_shape = test["block_shape"]
+            mask = BlockSparseMatrixEmulator.ones(
+                dense.shape, block_shape=block_shape, blocks=blocks, n_blocks=nblocks
+            ).to_dense()
+
+            versions = []
+            for slow in False, True:
+                sparse = BlockSparseMatrixEmulator.from_dense(dense, block_shape=block_shape, blocks=blocks, slow=slow)
+                versions.append(sparse)
+
+            for i, sparse in enumerate(versions):
+                dense2 = sparse.to_dense()
+                self.assertTrue(((dense * mask) == dense2).all())

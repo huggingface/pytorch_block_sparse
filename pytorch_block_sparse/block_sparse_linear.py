@@ -1,8 +1,15 @@
+import math
+from typing import Tuple
+
 import torch
 import torch.autograd
 import torch.nn as nn
 
-from .block_sparse import BlockSparseMatrix
+from .block_sparse import (
+    BlockSparseMatrix,
+    BlockSparseMatrixBase,
+    BlockSparseMatrixEmulator,
+)
 
 
 class BlockSparseLinearFunction(torch.autograd.Function):
@@ -26,7 +33,7 @@ class BlockSparseLinearFunction(torch.autograd.Function):
                 weight.data[::stride, ::stride],
             )
 
-        assert isinstance(weight, BlockSparseMatrix)
+        assert isinstance(weight, BlockSparseMatrixBase)
 
         ctx.save_for_backward(input, weight_data)
         ctx.weight = weight
@@ -51,7 +58,7 @@ class BlockSparseLinearFunction(torch.autograd.Function):
         verbose = False
         input, weight_data = ctx.saved_tensors
         weight = ctx.weight
-        assert isinstance(weight, BlockSparseMatrix)
+        assert isinstance(weight, BlockSparseMatrixBase)
 
         if verbose or check:
             dense_weight = weight.to_dense()
@@ -148,7 +155,7 @@ class BlockSparseLinearFunction(torch.autograd.Function):
 
 
 class BlockSparseLinear(nn.Module):
-    BLOCK_SIZE = 32
+    OPTIMIZED_BLOCK_SIZE = 32
 
     def __init__(
         self,
@@ -157,40 +164,52 @@ class BlockSparseLinear(nn.Module):
         bias: bool = True,
         density: float = 0.5,
         torch_nn_linear=None,
-        verbose=False,
+        verbose: bool = False,
+        block_shape: Tuple[int, int] = (32, 32),
     ):
         super(BlockSparseLinear, self).__init__()
         self.fn = BlockSparseLinearFunction.apply
         self.verbose = verbose
+        self.block_shape = block_shape
+        self._optimized = (
+            self.block_shape[0] == self.OPTIMIZED_BLOCK_SIZE and self.block_shape[1] == self.OPTIMIZED_BLOCK_SIZE
+        )
 
         if torch_nn_linear is not None:
             in_features = torch_nn_linear.in_features
             out_features = torch_nn_linear.out_features
             bias = torch_nn_linear.bias is not None
 
-        if in_features % self.BLOCK_SIZE != 0:
+        if in_features % self.block_shape[1] != 0:
             raise Exception(
-                f"BlockSparseLinear invalid in_features={in_features}, should be multiple of {self.BLOCK_SIZE}"
+                f"BlockSparseLinear invalid in_features={in_features}, should be multiple of {self.block_shape[1]}"
             )
-        if out_features % self.BLOCK_SIZE != 0:
+        if out_features % self.block_shape[0] != 0:
             raise Exception(
-                f"BlockSparseLinear invalid in_features={in_features}, should be multiple of {self.BLOCK_SIZE}"
+                f"BlockSparseLinear invalid in_features={in_features}, should be multiple of {self.block_shape[0]}"
             )
 
         if density < 0 or density > 1:
             raise Exception(f"BlockSparseLinear invalid density={density}")
 
-        self.block_count = int(density * (in_features * out_features / (self.BLOCK_SIZE * self.BLOCK_SIZE)))
+        self.block_count = int(density * (in_features * out_features / (self.block_shape[0] * self.block_shape[1])))
 
         self.in_features = in_features
         self.out_features = out_features
 
-        block_shape = (self.BLOCK_SIZE, self.BLOCK_SIZE)
+        block_shape = self.block_shape
+
+        if self._optimized:
+            BlockSparseMatrixConstructor = BlockSparseMatrix
+        else:
+            BlockSparseMatrixConstructor = BlockSparseMatrixEmulator
+
         if torch_nn_linear is not None:
             with torch.no_grad():
-                weight = BlockSparseMatrix.from_dense(torch_nn_linear.weight, block_shape, self.block_count)
+                weight = BlockSparseMatrixConstructor.from_dense(torch_nn_linear.weight, block_shape, self.block_count)
+            weight.multiply_(1.0 / math.sqrt(density))
         else:
-            weight = BlockSparseMatrix.randn(
+            weight = BlockSparseMatrixConstructor.randn(
                 (out_features, in_features),
                 self.block_count,
                 blocks=None,

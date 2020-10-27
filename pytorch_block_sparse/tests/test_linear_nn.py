@@ -4,28 +4,40 @@ from unittest import TestCase
 import torch
 import torch.optim as optim
 
-from pytorch_block_sparse import BlockSparseLinear
+from pytorch_block_sparse import (
+    BlockSparseLinear,
+    BlockSparseMatrix,
+    BlockSparseMatrixEmulator,
+)
 from pytorch_block_sparse.block_sparse_linear import PseudoBlockSparseLinear
 
 
 class TestFun(TestCase):
     def test0(self):
+        d = dict
         tests = [
-            {"size_a": [32, 32], "size_b": [32, 32], "density": 1.0},
-            {"size_a": [256, 32], "size_b": [32, 32], "density": 1.0},
+            d(size_a=[8, 4], size_b=[4, 4], block_shape_b=(4, 1), density=0.5),
+            d(size_a=[32, 32], size_b=[32, 32], block_shape_b=(4, 8), density=1.0),
+            d(size_a=[32, 32], size_b=[32, 32], density=1.0),
+            d(size_a=[256, 32], size_b=[32, 32], density=1.0),
         ]
         verbose = False
         for test in tests:
             lr = 0.001
 
-            stride = 8
+            stride = 1
             size_a = test["size_a"]
             size_b = test["size_b"]
-            print(f"size_a={size_a}, size_b={size_b}")
+            block_shape_b = test.get("block_shape_b", (32, 32))
+            # print(f"size_a={size_a}, size_b={size_b}")
             # Create the sparse linear layer
-            linear = BlockSparseLinear(size_b[0], size_b[1], True, test["density"])
+            linear = BlockSparseLinear(size_b[0], size_b[1], True, test["density"], block_shape=block_shape_b)
             if verbose:
-                print(linear.weight.data[::stride, ::stride])
+                print(f"linear weight {linear.weight.data.shape}\n", linear.weight.data[::stride, ::stride])
+                if hasattr(linear.weight, "_dense"):
+                    print(
+                        f"linear weight dense {linear.weight._dense.shape}\n", linear.weight._dense[::stride, ::stride]
+                    )
 
             # TODO : this does nothing
             linear.cuda()
@@ -89,10 +101,17 @@ class TestFun(TestCase):
                     print("a1 grad\n", a1.grad[::stride, ::stride])
                     print("a2 grad\n", a2.grad[::stride, ::stride])
 
-                    print(linear.weight.data.grad)
+                    print(linear.weight.get_differentiable_data().grad)
 
-                dense_grad = linear.weight.to_dense(data_replace=linear.weight.data.grad)
-                dense_mask = linear.weight.to_dense(data_replace=torch.ones_like(linear.weight.data.grad))
+                if isinstance(linear.weight, BlockSparseMatrix):
+                    dense_grad = linear.weight.to_dense(data_replace=linear.weight.get_differentiable_data().grad)
+                elif isinstance(linear.weight, BlockSparseMatrixEmulator):
+                    dense_grad = linear.weight.get_differentiable_data().grad
+                else:
+                    raise RuntimeError("Unknown linear weight type {linear.weight.__class__}")
+                dense_mask = linear.weight.to_dense(
+                    data_replace=torch.ones_like(linear.weight.get_differentiable_data().grad)
+                )
 
                 dense_grad_reference = dense.grad * dense_mask
 

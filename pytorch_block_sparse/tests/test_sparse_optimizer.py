@@ -4,8 +4,14 @@ from unittest import TestCase
 import torch
 import torch.optim as optim
 
-from pytorch_block_sparse import BlockSparseLinear, BlockSparseMatrix, SparseOptimizer
-from pytorch_block_sparse.sparse_optimizer import MagnitudeSparseOptimizerStrategy
+from pytorch_block_sparse import (
+    BlockSparseLinear,
+    BlockSparseMatrix,
+    SparseOptimizer,
+)
+from pytorch_block_sparse.sparse_optimizer import (
+    MagnitudeSparseOptimizerStrategy,
+)
 
 
 class TestFun(TestCase):

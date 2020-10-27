@@ -3,11 +3,6 @@ import torch.optim as optim
 
 from pytorch_block_sparse import BlockSparseMatrix
 
-try:
-    import transformers.optimization as transformers_optim
-except Exception:
-    transformers_optim = None
-
 
 class SparseOptimizerStrategy:
     def run(self, block_sparse_matrix):
@@ -134,6 +129,11 @@ class AdamOptimizerStateUpdater(OptimizerStateUpdater):
     def is_compatible(optimizer):
         if isinstance(optimizer, optim.Adam):
             return True
+
+        try:
+            import transformers.optimization as transformers_optim
+        except Exception:
+            transformers_optim = None
 
         if transformers_optim is not None:
             if isinstance(optimizer, transformers_optim.AdamW):

@@ -1,5 +1,3 @@
-import math
-
 import numpy
 import torch
 import torch.nn
@@ -24,12 +22,15 @@ class BlockSparseMatrixBase(torch.nn.Module):
 
         self.data = torch.nn.Parameter(data)
 
-        self.rebuild(block_mask)
+        self.rebuild(block_mask, callback=False)
+
+    def updated_data(self):
+        pass
 
     def get_differentiable_data(self):
         return self.data
 
-    def rebuild(self, block_mask, block_ptr=None):
+    def rebuild(self, block_mask, block_ptr=None, callback=True):
         data = self.data
         block_shape = self.block_shape
 
@@ -71,6 +72,8 @@ class BlockSparseMatrixBase(torch.nn.Module):
             (self.block_shape[1], self.block_shape[0]),
         )
         self.check_ = False
+        if callback:
+            self.updated_data()
 
     @staticmethod
     def blocks_count_(shape, block_shape):
@@ -219,24 +222,25 @@ class BlockSparseMatrixBase(torch.nn.Module):
     def zeros(cls, shape, n_blocks=None, blocks=None, block_shape=(32, 32), device="cuda"):
         for i in range(2):
             if shape[i] % block_shape[i] != 0:
-                raise Exception(
-                    f"Invalid shape: shape[{i}]({shape[i]}) %% block_shape[{i}]({block_shape[i]}) is not 0."
-                )
+                raise Exception(f"Invalid shape: shape[{i}]={shape[i]} %% block_shape[{i}]={block_shape[i]} is not 0.")
+
+        X, Y = cls.blocks_count_(shape, block_shape)
+
         if n_blocks is None:
-            assert blocks is not None
-            for b in blocks:
-                for i in range(2):
-                    if b[i] * block_shape[i] >= shape[i]:
-                        raise Exception(
-                            f"Invalid block definition: block[{i}] = {b[i]} : should be < {shape[i] // block_shape[i]}"
-                        )
-            n_blocks = len(blocks)
+            if blocks is not None:
+                for b in blocks:
+                    for i in range(2):
+                        if b[i] * block_shape[i] >= shape[i]:
+                            raise Exception(
+                                f"Invalid block definition: block[{i}] = {b[i]} : should be < {shape[i] // block_shape[i]}"
+                            )
+                n_blocks = len(blocks)
+            else:
+                n_blocks = X * Y
         else:
             assert blocks is None
         if len(shape) != 2 or shape[0] % block_shape[0] != 0 or shape[1] % block_shape[1] != 0:
             raise Exception("shape should be a tuple of 2 multiples of block_shape")
-
-        X, Y = cls.blocks_count_(shape, block_shape)
 
         if n_blocks > X * Y:
             raise Exception("Too many blocks : %d > %d * %d = %d" % (n_blocks, X, Y, X * Y))
@@ -258,10 +262,26 @@ class BlockSparseMatrixBase(torch.nn.Module):
         return cls(shape, block_mask, data, block_shape)
 
     @classmethod
+    def ones(
+        cls,
+        shape,
+        n_blocks=None,
+        blocks=None,
+        block_shape=(32, 32),
+        device="cuda",
+        positive=False,
+    ):
+        ret = cls.zeros(shape, n_blocks, blocks, block_shape, device)
+        with torch.no_grad():
+            ret.data += 1
+        ret.updated_data()
+        return ret
+
+    @classmethod
     def randn(
         cls,
         shape,
-        n_blocks,
+        n_blocks=None,
         blocks=None,
         block_shape=(32, 32),
         device="cuda",
@@ -273,35 +293,63 @@ class BlockSparseMatrixBase(torch.nn.Module):
                 ret.data.normal_().abs_()
             else:
                 ret.data.normal_()
+        ret.updated_data()
         return ret
 
     @classmethod
-    def from_dense(cls, dense, block_shape=(32, 32), block_count=None):
-        dense_block_count = (dense.shape[0] * dense.shape[1]) // (block_shape[0] * block_shape[1])
-        if block_count is None:
-            block_count = dense_block_count
+    def from_dense(cls, dense, block_shape=(32, 32), block_count=None, blocks=None, slow=False, out=None):
+        if out is None:
+            if blocks is None:
+                dense_block_count = (dense.shape[0] * dense.shape[1]) // (block_shape[0] * block_shape[1])
+                if block_count is None:
+                    block_count = dense_block_count
+            else:
+                block_count = None
 
-        ret = cls.zeros(
-            dense.shape,
-            n_blocks=block_count,
-            block_shape=block_shape,
-            device=dense.device,
-        )
-
-        if block_count == dense_block_count:
-            # TODO : use some pytorch dimensions transposition to speed up this block by block copy
-            coo = ret.build_coo_block_index().long()
-
-            for i in range(coo.shape[1]):
-                r, c = coo[0][i], coo[1][i]
-                bs = ret.block_shape
-                ret.data[i * bs[0] : (i + 1) * bs[0], :] = dense[
-                    r * bs[0] : (r + 1) * bs[0], c * bs[1] : (c + 1) * bs[1]
-                ].t()
+            ret = cls.zeros(
+                dense.shape,
+                n_blocks=block_count,
+                block_shape=block_shape,
+                blocks=blocks,
+                device=dense.device,
+            )
         else:
+            ret = out
+
+        if out is not None or blocks is not None or block_count == dense_block_count:
+            # In case we keep the full matrix (block_count == dense_block_count), we make sure the
+            # order is the right one, mostly for testing purposes.
+            coo = ret.build_coo_block_index().long()
+            if slow:
+                # Legacy version, used for testing only
+                for i in range(coo.shape[1]):
+                    r, c = coo[0][i], coo[1][i]
+                    bs = ret.block_shape
+                    part = dense[r * bs[0] : (r + 1) * bs[0], c * bs[1] : (c + 1) * bs[1]]
+                    part = part.t().reshape(block_shape[0], block_shape[1])
+                    with torch.no_grad():
+                        ret.data[i * bs[0] : (i + 1) * bs[0]] = part
+            else:
+                dense2 = dense.reshape(
+                    dense.shape[0] // block_shape[0], block_shape[0], dense.shape[1] // block_shape[1], block_shape[1]
+                )
+                dense2 = dense2.transpose(1, 2)
+                dense2 = dense2.transpose(2, 3)
+                dense2 = dense2.reshape(-1, block_shape[0], block_shape[1])
+                indices = coo[0] * (dense.shape[1] // block_shape[1]) + coo[1]
+                indices = indices.unsqueeze(-1).unsqueeze(-1).expand(-1, block_shape[0], block_shape[1])
+                new_data = torch.gather(dense2, 0, indices)
+                new_data = new_data.reshape(-1, block_shape[1])
+                with torch.no_grad():
+                    ret.data.copy_(new_data)
+        else:
+            # We just keep the first elements in the dense matrix
+            # Of course this only captures the statistical distribution in the dense matrix
             param_count = ret.data.numel()
-            density = block_count / dense_block_count
-            ret.data.copy_(dense.flatten()[:param_count].reshape(ret.data.shape) / math.sqrt(density))
+            with torch.no_grad():
+                ret.data.copy_(dense.flatten()[:param_count].reshape(ret.data.shape))
+
+        ret.updated_data()
 
         return ret
 
@@ -314,6 +362,11 @@ class BlockSparseMatrixBase(torch.nn.Module):
             self.data.shape,
             self.block_shape,
         )
+
+    def multiply_(self, factor):
+        with torch.no_grad():
+            self.data.multiply_(factor)
+        self.updated_data()
 
     def build_coo_block_index(self):
         device = self.cols_a.device
@@ -356,11 +409,13 @@ class BlockSparseMatrixBase(torch.nn.Module):
             data = data_replace
         else:
             data = self.data
-        data = data.reshape(-1, *self.block_shape).transpose(1, 2)
+        data = data.reshape(-1, self.block_shape[1], self.block_shape[0])
+        data = data.transpose(1, 2)
         out = torch.sparse.FloatTensor(
             coo,
             data,
-            (self.shape[0] // self.block_shape[0], self.shape[1] // self.block_shape[1]) + self.block_shape,
+            (self.shape[0] // self.block_shape[0], self.shape[1] // self.block_shape[1])
+            + (self.block_shape[0], self.block_shape[1]),
         )
 
         return out
@@ -489,7 +544,8 @@ class BlockSparseMatrixBase(torch.nn.Module):
             data_b = data.reshape(-1, block_shape[1]).contiguous()
 
         if not dense_a.is_contiguous():
-            # warnings.warn(f"pytorch_block_sparse.BlockSparseMatrix.reverse_matmul: DEGRADED performance, dense_a is not contiguous {dense_a.stride()}")
+            # warnings.warn(f"pytorch_block_sparse.BlockSparseMatrix.reverse_matmul:"
+            #               f" DEGRADED performance, dense_a is not contiguous {dense_a.stride()}")
             dense_a = dense_a.contiguous()
 
         verbose = False
@@ -572,12 +628,15 @@ class BlockSparseMatrixBase(torch.nn.Module):
         else:
             data = torch.zeros_like(self.data)
 
-        message = "pytorch_block_sparse.BlockSparseMatrix.matmul_with_output_sparse_support: DEGRADED performance, dense_%s is not contiguous"
+        message = (
+            "pytorch_block_sparse.BlockSparseMatrix.matmul_with_output_sparse_support:"
+            " DEGRADED performance, dense_%s is not contiguous"
+        )
         prepared_a, transpose_a = self.tensor_prepare(dense_a, message % "a", True)
         prepared_b, transpose_b = self.tensor_prepare(dense_b, message % "b", False)
 
-        # We interpret a as transposed, so we pass shape_a[1], shape_a[0] as a shape,
-        # and transpose_a will be set correcly too (for a "normal" contiguous pytorch matrix a, transpose_a will be true)
+        # We interpret a as transposed, so we pass shape_a[1], shape_a[0] as a shape, and transpose_a
+        # will be set correcly too (for a "normal" contiguous pytorch matrix a, transpose_a will be true)
         block_sparse_native.blocksparse_matmul_back_cutlass(
             prepared_a,
             transpose_a,
@@ -626,18 +685,29 @@ class BlockSparseMatrixEmulator(BlockSparseMatrixBase):
     # Data is (len(cols), block_shape, block_shape)
     def __init__(self, shape, block_mask, data, block_shape):
         super(BlockSparseMatrixEmulator, self).__init__(shape, block_mask, data, block_shape)
+        self.register_parameter("_dense", None)
+        self.updated_data()
 
     def get_differentiable_data(self):
-        return self.dense_
+        return self._dense
 
-    def rebuild(self, block_mask, block_ptr=None):
-        super().rebuild(block_mask, block_ptr)
-        self._dense = self.to_dense()
-        self._mask = self.to_dense(data_replace=torch.ones_like(self.data)) == 1
+    def to_dense(self, data_replace=None):
+        if data_replace is None:
+            return self._dense
+        return data_replace * self._mask
 
-    def reverse_matmul(self, dense_a, transpose):
+    def _update_data_from_dense(self):
+        _ = self.from_dense(self._dense, out=self)
+
+    def updated_data(self):
+        with torch.no_grad():
+            self._dense = torch.nn.Parameter(super().to_dense())
+            self._mask = super().to_dense(data_replace=torch.ones_like(self.data)) == 1
+
+    def reverse_matmul(self, dense_a, transpose=True):
         m = self._dense.t() if transpose else self._dense
-        return dense_a.matmul(m * self._mask)  # The self._mask multiplication is not really needed, but ...
+        mask = self._mask.t() if transpose else self._mask
+        return dense_a.matmul(m * mask)  # The self._mask multiplication is not really needed, but ...
 
     def matmul_with_output_sparse_support(self, dense_a, dense_b, overwrite_data=False):
         """Compute  c = a.t().mm(b) where c is sparse (we just keep the results where c is non_zero)."""

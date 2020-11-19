@@ -48,7 +48,7 @@ class MagnitudeSparseOptimizerStrategy(SparseOptimizerStrategy):
 
         # Find available positions
         block_mask = ~bsm.block_mask_build(None)
-        available = block_mask.nonzero()
+        available = block_mask.nonzero(as_tuple=False)
 
         # Extract some random position
         empty_positions_indices = torch.randperm(available.shape[0])[: bad_blocks.shape[0]]

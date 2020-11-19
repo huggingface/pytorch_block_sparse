@@ -146,7 +146,7 @@ class TestFun(TestCase):
             # Basic check
             all_compare = torch.isclose(c, c_0)
             if not all_compare.all():
-                # print((all_compare != True).nonzero())
+                # print((all_compare != True).nonzero(as_tuple=False))
                 # print((c-c_0).abs().max())
                 self.assertTrue(False)
 

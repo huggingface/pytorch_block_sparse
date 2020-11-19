@@ -109,7 +109,7 @@ class TestFun(TestCase):
                     print("c!=0\n", (c_ != 0).long())
                     print("c0!=0\n", (c0_ != 0).long())
                     print("equals\n", ((c_ - c0_).abs() < 1e-06).long())
-                    print("equals nonzero\n", ((c_ - c0_).abs() > 1e-06).nonzero().t())
+                    print("equals nonzero\n", ((c_ - c0_).abs() > 1e-06).nonzero(as_tuple=True))
 
                 atol = 1e-8
                 rtol = 1e-5

@@ -1,3 +1,4 @@
+import unittest
 from unittest import TestCase
 
 import torch
@@ -61,9 +62,15 @@ class TestFun(TestCase):
 
             versions = []
             for slow in False, True:
-                sparse = BlockSparseMatrixEmulator.from_dense(dense, block_shape=block_shape, blocks=blocks, slow=slow)
+                sparse = BlockSparseMatrixEmulator.from_dense(
+                    dense, block_shape=block_shape, blocks=blocks, slow=slow, exact=False
+                )
                 versions.append(sparse)
 
             for i, sparse in enumerate(versions):
                 dense2 = sparse.to_dense()
                 self.assertTrue(((dense * mask) == dense2).all())
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -100,7 +100,7 @@ class BlockSparseLinearFunction(torch.autograd.Function):
                         )
                         print(
                             "grad_input0/1 comparison: position of differences\n",
-                            ((grad_input0 - grad_input1).abs() > atol).nonzero(),
+                            ((grad_input0 - grad_input1).abs() > atol).nonzero(as_tuple=False),
                         )
 
                         print("grad_input0 max\n", grad_input0.abs().max())
@@ -189,10 +189,12 @@ class BlockSparseLinear(nn.Module):
                 f"BlockSparseLinear invalid in_features={in_features}, should be multiple of {self.block_shape[0]}"
             )
 
-        if density < 0 or density > 1:
+        if density is None:
+            block_count = None
+        elif density < 0 or density > 1:
             raise Exception(f"BlockSparseLinear invalid density={density}")
-
-        self.block_count = int(density * (in_features * out_features / (self.block_shape[0] * self.block_shape[1])))
+        else:
+            block_count = int(density * (in_features * out_features / (self.block_shape[0] * self.block_shape[1])))
 
         self.in_features = in_features
         self.out_features = out_features
@@ -204,14 +206,19 @@ class BlockSparseLinear(nn.Module):
         else:
             BlockSparseMatrixConstructor = BlockSparseMatrixEmulator
 
+        exact = block_count is None
+
         if torch_nn_linear is not None:
             with torch.no_grad():
-                weight = BlockSparseMatrixConstructor.from_dense(torch_nn_linear.weight, block_shape, self.block_count)
+                weight = BlockSparseMatrixConstructor.from_dense(
+                    torch_nn_linear.weight, block_shape, block_count, exact=exact
+                )
+            block_count = weight.nnz_block_count()
             weight.multiply_(1.0 / math.sqrt(density))
         else:
             weight = BlockSparseMatrixConstructor.randn(
                 (out_features, in_features),
-                self.block_count,
+                block_count,
                 blocks=None,
                 block_shape=block_shape,
                 device="cuda",
@@ -225,6 +232,8 @@ class BlockSparseLinear(nn.Module):
                     self.bias.copy_(torch_nn_linear.bias)
         else:
             self.register_parameter("bias", None)
+
+        self.block_count = block_count
 
     def forward(self, x):
         x = self.fn(x, self.weight.get_differentiable_data(), self.weight)

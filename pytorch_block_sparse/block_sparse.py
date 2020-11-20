@@ -300,10 +300,9 @@ class BlockSparseMatrixBase(torch.nn.Module):
     ):
         ret = cls.zeros(shape, n_blocks, blocks, block_shape, device)
         with torch.no_grad():
+            ret.data.normal_()
             if positive:
-                ret.data.normal_().abs_()
-            else:
-                ret.data.normal_()
+                ret.data.abs_()
         ret.updated_data()
         return ret
 
@@ -373,7 +372,7 @@ class BlockSparseMatrixBase(torch.nn.Module):
             # Of course this only captures the statistical distribution in the dense matrix
             param_count = ret.data.numel()
             with torch.no_grad():
-                ret.data.copy_(dense.flatten()[:param_count].reshape(ret.data.shape))
+                ret.data.copy_(dense.flatten()[:param_count].reshape(ret.data.shape) / math.sqrt(density))
 
         ret.updated_data()
 

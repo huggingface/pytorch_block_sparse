@@ -73,7 +73,7 @@ class BlockSparseModelPatcher(ModelPatcher):
             return False
 
     def new_child_module(self, child_module_name, child_module, patch_info):
-        density = patch_info["density"]
+        density = patch_info.get("density")
         pseudo = patch_info.get("pseudo_linear")
         if pseudo:
             patch_type = "PseudoBlockSparseLinear (debug)"

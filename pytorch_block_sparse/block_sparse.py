@@ -1,7 +1,7 @@
 import numpy
 import torch
 import torch.nn
-
+import math
 
 class BlockSparseMatrixBase(torch.nn.Module):
     # cols is a list of nonzero block column indexes (int32)

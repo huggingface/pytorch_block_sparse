@@ -214,7 +214,8 @@ class BlockSparseLinear(nn.Module):
                     torch_nn_linear.weight, block_shape, block_count, exact=exact
                 )
             block_count = weight.nnz_block_count()
-            weight.multiply_(1.0 / math.sqrt(density))
+            if density != None:
+                weight.multiply_(1.0 / math.sqrt(density))
         else:
             weight = BlockSparseMatrixConstructor.randn(
                 (out_features, in_features),
@@ -234,6 +235,8 @@ class BlockSparseLinear(nn.Module):
             self.register_parameter("bias", None)
 
         self.block_count = block_count
+        weight_blocks_count = self.weight.blocks_count()
+        print("Final density:", block_count / weight_blocks_count[0] / weight_blocks_count[1])
 
     def forward(self, x):
         x = self.fn(x, self.weight.get_differentiable_data(), self.weight)

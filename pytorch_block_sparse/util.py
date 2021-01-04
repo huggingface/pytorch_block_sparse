@@ -40,6 +40,7 @@ class ModelPatcher:
             setattr(father, child_name, new_child_module)
 
     def patch_model(self, model):
+        """Modes are block_sparse, or dense. Dense is just trying to remove entire columns/rows."""
         modules = {}
         modified = False
         for k, v in model.named_modules():
@@ -58,11 +59,49 @@ class ModelPatcher:
                 " Check patchable layers with `mp.get_patchable_layers(model)`"
             )
 
+class BertHeadsPruner():
+    def __init__(self, model):
+        self.model = model
+
+    def analyze_head(self, p, head_size):
+        p0 = (p != 0).reshape(p.shape[0] // head_size, head_size, p.shape[1]).any(-1).any(-1)
+        return p0
+
+    def get_pruned_heads(self):
+        heads_count = 0
+        to_prune = {}
+        for name, module in self.model.named_modules():
+            if name.endswith("attention.self"):
+                layer_number = int(name.split(".")[3])
+                parts = []
+                for a in ["query", "key", "value"]:
+                    p = self.analyze_head(getattr(module, a).weight, module.attention_head_size)
+                    parts.append(p)
+                parts = list(torch.stack(parts, 0).all(0).cpu().detach().numpy())
+                heads_count += len(parts)
+
+                heads_to_prune = [i for i, p in enumerate(parts) if not p]
+
+                to_prune[layer_number] = heads_to_prune
+        return to_prune, heads_count
+
+    def run(self):
+        model = self.model
+
+        to_prune, heads_count = self.get_pruned_heads()
+
+        model.prune_heads(to_prune)
+        return sum([len(p) for p in to_prune.values()]), heads_count
 
 class BlockSparseModelPatcher(ModelPatcher):
     """Use {"density":d} with d in [0,1] in patch_info}
     Use {"pseudo_linear":True} in patch_info to use a pytorch only implementation, if you think there is a bug
     in pytorch_block_sparse library"""
+
+    def __init__(self, prune_heads=False, mode="block_sparse"):
+        super().__init__()
+        self.prune_heads = prune_heads
+        self.mode = mode
 
     def is_patchable(self, module_name, module, raiseError):
         if isinstance(module, torch.nn.Linear):
@@ -72,7 +111,7 @@ class BlockSparseModelPatcher(ModelPatcher):
                 raise Exception(f"Cannot patch {module_name}: this is not a Linear layer:\n{module}")
             return False
 
-    def new_child_module(self, child_module_name, child_module, patch_info):
+    def new_child_module_block_sparse(self, child_module_name, child_module, patch_info):
         density = patch_info.get("density")
         pseudo = patch_info.get("pseudo_linear")
         if pseudo:
@@ -90,3 +129,45 @@ class BlockSparseModelPatcher(ModelPatcher):
             ret = PseudoBlockSparseLinear(ret)
 
         return ret
+
+    def get_sparsity(self, w, dim):
+        r = (w != 0).sum(dim)
+        nnz = (r != 0).sum()
+        return 1.0 - (nnz / r.numel()), r != 0
+
+
+    def new_child_module_dense(self, child_module_name, child_module, patch_info):
+        if "attention" in child_module_name:
+            return None
+        weight = child_module.weight
+        device = weight.device
+        bias = child_module.bias
+
+        r_sparsity, r = self.get_sparsity(weight, 1)
+        c_sparsity, c = self.get_sparsity(weight, 0)
+
+        if r_sparsity > c_sparsity:
+            weight = weight[r != 0]
+            bias = bias[r != 0]
+        else:
+            weight = weight[:, c != 0]
+
+        ret = torch.nn.Linear(weight.shape[1], weight.shape[0], bias = True).to(device)
+        with torch.no_grad():
+            ret.weight.copy_(weight)
+            ret.bias.copy_(bias)
+        return ret
+
+    def new_child_module(self, child_module_name, child_module, patch_info):
+        if self.mode == "block_sparse":
+            return self.new_child_module_block_sparse(child_module_name, child_module, patch_info)
+        elif self.mode == "dense":
+            return self.new_child_module_dense(child_module_name, child_module, patch_info)
+
+    def patch_model(self, model):
+        if self.prune_heads:
+            pruner = BertHeadsPruner(model)
+            removed_heads, total_heads = pruner.run()
+            print(f"removed heads {removed_heads}, total_heads={total_heads}, percentage removed={removed_heads/total_heads}")
+
+        super().patch_model(model)

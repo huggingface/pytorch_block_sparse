@@ -72,7 +72,7 @@ class BertHeadsPruner():
         to_prune = {}
         for name, module in self.model.named_modules():
             if name.endswith("attention.self"):
-                layer_number = int(name.split(".")[3])
+                layer_number = int(''.join(ch for ch in name if ch.isnumeric()))
                 parts = []
                 for a in ["query", "key", "value"]:
                     p = self.analyze_head(getattr(module, a).weight, module.attention_head_size)
@@ -92,6 +92,72 @@ class BertHeadsPruner():
 
         model.prune_heads(to_prune)
         return sum([len(p) for p in to_prune.values()]), heads_count
+
+
+import torch.nn as nn
+
+
+class SparseDimensionsLinear(nn.Module):
+    def __init__(self, linear,
+                 prune_input=True,
+                 prune_output=True,
+                 input_keep_dimension=True,
+                 output_keep_dimension=True):
+        super().__init__()
+        weight = linear.weight.detach()
+        weight0 = weight
+        c_sparsity, c = self.get_sparsity(weight, 0, prune_input)
+        r_sparsity, r = self.get_sparsity(weight, 1, prune_output)
+        self.in_features = linear.in_features
+        self.out_features = linear.out_features
+
+        if c_sparsity != 0 and input_keep_dimension:
+            self.register_buffer("input_extract", c)
+        else:
+            self.register_buffer("input_extract", None)
+
+        if r_sparsity != 0 and output_keep_dimension:
+            self.register_buffer("output_expand", r)
+        else:
+            self.register_buffer("output_expand", None)
+
+        weight = weight[r, :][:, c]
+        #print(weight.shape)
+
+        #print(f"c_sparsity={c_sparsity}, r_sparsity={r_sparsity}")
+        #print(self.input_extract, self.output_expand)
+        #print("remaining %0.2f %% " % (100 * weight.numel()  / weight0.numel()))
+
+        bias = linear.bias.detach()[r]
+
+        new_linear = torch.nn.Linear(weight.shape[1], weight.shape[0], bias=True).to(weight.device)
+        with torch.no_grad():
+            new_linear.weight.copy_(weight)
+            new_linear.bias.copy_(bias)
+        self.linear = new_linear
+
+    def get_sparsity(self, w, dim, prune):
+        if prune:
+            l = (w != 0).sum(dim)
+            nnz = (l != 0).sum()
+            idx = l.nonzero(as_tuple = False).squeeze(-1)
+            return 1.0 - (float(nnz) / l.numel()), idx
+        else:
+            return 0.0, None
+
+    def forward(self, batch):
+        if self.input_extract is not None:
+            batch = batch[..., self.input_extract]
+        batch = self.linear(batch)
+
+        if self.output_expand is not None:
+            output_shape = list(batch.shape)
+            output_shape[-1] = self.out_features
+            output = torch.zeros(output_shape, device=batch.device)
+            output[..., self.output_expand] = batch
+            batch = output
+        return batch
+
 
 class BlockSparseModelPatcher(ModelPatcher):
     """Use {"density":d} with d in [0,1] in patch_info}
@@ -137,26 +203,11 @@ class BlockSparseModelPatcher(ModelPatcher):
 
 
     def new_child_module_dense(self, child_module_name, child_module, patch_info):
-        if "attention" in child_module_name:
-            return None
-        weight = child_module.weight
-        device = weight.device
-        bias = child_module.bias
+        keep_dimension = patch_info.get("keep_dimension", False)
 
-        r_sparsity, r = self.get_sparsity(weight, 1)
-        c_sparsity, c = self.get_sparsity(weight, 0)
-
-        if r_sparsity > c_sparsity:
-            weight = weight[r != 0]
-            bias = bias[r != 0]
-        else:
-            weight = weight[:, c != 0]
-
-        ret = torch.nn.Linear(weight.shape[1], weight.shape[0], bias = True).to(device)
-        with torch.no_grad():
-            ret.weight.copy_(weight)
-            ret.bias.copy_(bias)
-        return ret
+        return SparseDimensionsLinear(child_module,
+                                      input_keep_dimension=keep_dimension,
+                                      output_keep_dimension=keep_dimension)
 
     def new_child_module(self, child_module_name, child_module, patch_info):
         if self.mode == "block_sparse":
